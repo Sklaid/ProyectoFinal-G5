@@ -210,7 +210,7 @@ Este documento define los requerimientos para la implementación de una platafor
 4. THE Pipeline SHALL incluir un stage de análisis de seguridad de dependencias
 5. WHEN cualquier stage adicional falla, THE Pipeline SHALL ejecutar rollback automático
 
-### Requirement 16
+### Requirement 16 Documentación
 
 **User Story:** Como arquitecto de software, quiero documentar la arquitectura de la solución, para que el equipo comprenda la estructura del sistema y las herramientas utilizadas.
 
@@ -222,7 +222,7 @@ Este documento define los requerimientos para la implementación de una platafor
 4. THE Documentación SHALL incluir el flujo de datos entre componentes
 5. THE Documentación SHALL especificar los puertos, protocolos y mecanismos de comunicación
 
-### Requirement 17
+### Requirement 17 Documentación
 
 **User Story:** Como líder de equipo, quiero definir el modelo organizativo DevOps, para que el equipo trabaje de manera colaborativa y eficiente.
 
@@ -234,7 +234,7 @@ Este documento define los requerimientos para la implementación de una platafor
 4. THE Documentación SHALL definir los mecanismos de comunicación y colaboración entre equipos
 5. THE Documentación SHALL incluir métricas para evaluar la efectividad del modelo organizativo
 
-### Requirement 18
+### Requirement 18 Documentación
 
 **User Story:** Como gerente de proyecto, quiero realizar un Value Stream Mapping, para que pueda identificar desperdicios y optimizar el flujo de valor.
 
@@ -246,7 +246,7 @@ Este documento define los requerimientos para la implementación de una platafor
 4. THE VSM SHALL identificar cuellos de botella y desperdicios en el proceso actual
 5. THE VSM SHALL cuantificar las mejoras esperadas en tiempo de ciclo y eficiencia
 
-### Requirement 19
+### Requirement 19 Documentación
 
 **User Story:** Como líder técnico, quiero evaluar el nivel de madurez DevOps según DSOOM, para que pueda medir el progreso y planificar mejoras continuas.
 
@@ -258,7 +258,7 @@ Este documento define los requerimientos para la implementación de una platafor
 4. THE Documentación SHALL justificar el nivel alcanzado en cada dimensión con evidencia específica
 5. THE Documentación SHALL proponer un plan de acción para alcanzar niveles superiores de madurez
 
-### Requirement 20
+### Requirement 20 Documentación
 
 **User Story:** Como product owner, quiero definir historias de usuario y Definition of Done, para que el equipo tenga claridad sobre los entregables y criterios de aceptación.
 
