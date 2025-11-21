@@ -206,7 +206,7 @@ El proyecto utilizará Git Flow como estrategia de branching:
 
 **Flujo de Trabajo para Este Proyecto (Simplified Git Flow):**
 
-Versión simplificada de Git Flow
+Versión simplificada de Git Flowa
 
 ```mermaid
 gitGraph
