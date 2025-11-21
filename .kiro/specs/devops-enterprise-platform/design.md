@@ -206,7 +206,7 @@ El proyecto utilizará Git Flow como estrategia de branching:
 
 **Flujo de Trabajo para Este Proyecto (Simplified Git Flow):**
 
-Para este proyecto, se adopta una versión simplificada de Git Flow optimizada para desarrollo individual:
+Versión simplificada de Git Flow
 
 ```mermaid
 gitGraph
@@ -244,8 +244,6 @@ gitGraph
 - `develop` → Entorno de desarrollo (donde ocurre todo el trabajo)
 - `release/*` → Entorno de pre-producción / staging (validación final)
 - `main` → Entorno de PRODUCCIÓN (código estable y desplegado)
-
-**Nota:** Esta estrategia simplificada es ideal para proyectos individuales o equipos pequeños, manteniendo los beneficios de Git Flow (separación develop/main, releases controladas) sin la complejidad de múltiples feature branches.
 
 **Políticas de Protección:**
 - `main` requiere que todos los checks del pipeline pasen antes de merge
