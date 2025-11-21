@@ -4,16 +4,16 @@
 
 ### About TechCorp Solutions
 
-**TechCorp Solutions** es una empresa ficticia de desarrollo de software fundada en 2015, con sede en Madrid, España. La empresa se especializa en crear soluciones empresariales personalizadas para clientes en los sectores de finanzas, retail y logística. Con un equipo de 50 empleados, TechCorp ha crecido constantemente pero enfrenta desafíos significativos en su proceso de entrega de software.
+**TechCorp Solutions** es una empresa ficticia de desarrollo de software fundada en 2024, con sede en Lima, Perú. La empresa se especializa en crear soluciones empresariales personalizadas para clientes en los sectores de finanzas, retail y logística. Con un equipo de 20 empleados, TechCorp ha crecido constantemente, pero enfrenta desafíos significativos en su proceso de entrega de software.
 
 ### Current Organizational Structure (Before DevOps)
 
 **Estructura Tradicional:**
-- **Departamento de Desarrollo (20 personas):** Dividido en equipos por tecnología (Backend, Frontend, Mobile)
-- **Departamento de Operaciones (8 personas):** Responsable de infraestructura, despliegues y monitoreo
-- **Departamento de QA (6 personas):** Testing manual y automatización limitada
-- **Departamento de Seguridad (3 personas):** Auditorías de seguridad trimestrales
-- **Project Managers (5 personas):** Coordinación entre departamentos
+- **Departamento de Desarrollo (10 personas):** Dividido en equipos por tecnología (Backend, Frontend, Mobile)
+- **Departamento de Operaciones (4 personas):** Responsable de infraestructura, despliegues y monitoreo
+- **Departamento de QA (2 personas):** Testing manual y automatización limitada
+- **Departamento de Seguridad (1 personas):** Auditorías de seguridad trimestrales
+- **Project Managers (3 personas):** Coordinación entre departamentos
 
 **Problemas Identificados:**
 1. **Silos Organizacionales:** Comunicación limitada entre Dev, Ops y QA
@@ -204,7 +204,9 @@ El proyecto utilizará Git Flow como estrategia de branching:
 - La rama `develop` representa el entorno de **DESARROLLO**
 - No existe una rama separada llamada "producción" - `main` cumple ese rol
 
-**Flujo de Trabajo:**
+**Flujo de Trabajo para Este Proyecto (Simplified Git Flow):**
+
+Para este proyecto, se adopta una versión simplificada de Git Flow optimizada para desarrollo individual:
 
 ```mermaid
 gitGraph
@@ -212,51 +214,44 @@ gitGraph
     branch develop
     checkout develop
     commit id: "Setup project"
-    
-    branch feature/login
-    checkout feature/login
-    commit id: "Add login UI"
-    commit id: "Add auth API"
-    
-    checkout develop
-    merge feature/login
-    commit id: "Integration tests"
+    commit id: "Backend auth"
+    commit id: "Frontend UI"
+    commit id: "CRUD operations"
+    commit id: "Testing"
+    commit id: "CI/CD pipeline"
+    commit id: "Documentation"
     
     branch release/1.0.0
     checkout release/1.0.0
     commit id: "Version bump"
-    commit id: "Final tests"
+    commit id: "Final validation"
     
     checkout main
     merge release/1.0.0 tag: "v1.0.0"
     
     checkout develop
     merge release/1.0.0
-    
-    checkout main
-    branch hotfix/security
-    commit id: "Security fix"
-    
-    checkout main
-    merge hotfix/security tag: "v1.0.1"
-    
-    checkout develop
-    merge hotfix/security
 ```
 
-**Mapeo Rama-Entorno:**
-- `feature/*` → Entorno de desarrollo local (máquina del desarrollador)
-- `develop` → Entorno de desarrollo compartido (servidor de desarrollo)
-- `release/*` → Entorno de pre-producción / staging
-- `main` → Entorno de PRODUCCIÓN (servidor de producción)
+**Estrategia de Desarrollo:**
+- **Todo el desarrollo (Tasks 0-22) se realiza en la rama `develop`**
+- Commits frecuentes en `develop` con mensajes descriptivos
+- Al completar Task 22 (validación final), se crea rama `release/1.0.0`
+- Después de validación en release, se hace merge a `main` y se tagea como `v1.0.0`
+- `main` representa el código en producción, siempre estable
 
-**Nota:** En Git Flow, `main` es la rama de producción. Cada commit en `main` representa una versión que está o estará en producción. Por eso `main` siempre debe estar estable y lista para desplegar.
+**Mapeo Rama-Entorno:**
+- `develop` → Entorno de desarrollo (donde ocurre todo el trabajo)
+- `release/*` → Entorno de pre-producción / staging (validación final)
+- `main` → Entorno de PRODUCCIÓN (código estable y desplegado)
+
+**Nota:** Esta estrategia simplificada es ideal para proyectos individuales o equipos pequeños, manteniendo los beneficios de Git Flow (separación develop/main, releases controladas) sin la complejidad de múltiples feature branches.
 
 **Políticas de Protección:**
-- `main` y `develop` requieren pull request con al menos 1 aprobación
-- `main` requiere que todos los checks del pipeline pasen
-- No se permiten commits directos a `main` o `develop`
-- Los merges a `main` deben ser fast-forward o merge commits
+- `main` requiere que todos los checks del pipeline pasen antes de merge
+- No se permiten commits directos a `main`
+- `develop` es la rama de trabajo principal
+- Los merges a `main` solo ocurren desde ramas `release/*`
 
 ### Arquitectura de Red y Puertos
 
@@ -935,13 +930,31 @@ class EmployeeAPIIntegrationTest {
 - `auth.postman_collection.json`: Tests de autenticación
 - `employees.postman_collection.json`: Tests de CRUD de empleados
 
-**Ejecución en Pipeline:**
+**Reportes de Newman:**
+
+El proyecto utiliza múltiples reportes de Newman para diferentes propósitos:
+
+1. **CLI Reporter**: Output en consola para feedback inmediato durante ejecución
+2. **HTMLExtra Reporter**: Reporte visual detallado con gráficos y métricas (requiere `npm install -g newman-reporter-htmlextra`)
+3. **JUnit XML Reporter**: Formato estándar para integración con CI/CD y dashboards
+
+**Ejecución Estándar:**
 ```bash
+# Instalar reporter HTMLExtra (solo primera vez)
+npm install -g newman-reporter-htmlextra
+
+# Ejecutar colección con múltiples reportes
 newman run postman/employees.postman_collection.json \
   --environment postman/env.json \
-  --reporters cli,json \
-  --reporter-json-export newman-results.json
+  --reporters cli,htmlextra,junit \
+  --reporter-htmlextra-export reports/newman-report.html \
+  --reporter-junit-export reports/newman-junit.xml
 ```
+
+**Reportes Generados:**
+- `reports/newman-report.html`: Reporte HTML visual con gráficos, tiempos de respuesta, y detalles de cada test
+- `reports/newman-junit.xml`: Reporte XML compatible con Jenkins, GitHub Actions, y otras herramientas CI/CD
+- Consola: Output en tiempo real con resumen de tests pasados/fallados
 
 **Assertions en Postman:**
 ```javascript
@@ -954,6 +967,10 @@ pm.test("Response has correct structure", function () {
     pm.expect(jsonData).to.have.property('id');
     pm.expect(jsonData).to.have.property('email');
     pm.expect(jsonData.email).to.match(/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/);
+});
+
+pm.test("Response time is acceptable", function () {
+    pm.expect(pm.response.responseTime).to.be.below(500);
 });
 ```
 
@@ -1236,15 +1253,35 @@ graph LR
 
 #### 10. API Tests with Newman
 ```yaml
-- name: Install Newman
+- name: Install Newman and reporters
   run: npm install -g newman newman-reporter-htmlextra
 
 - name: Run Postman collections
   run: |
     newman run postman/auth.postman_collection.json \
       --environment postman/preprod.env.json \
-      --reporters cli,htmlextra \
-      --reporter-htmlextra-export newman-report.html
+      --reporters cli,htmlextra,junit \
+      --reporter-htmlextra-export reports/newman-auth-report.html \
+      --reporter-junit-export reports/newman-auth-junit.xml
+    
+    newman run postman/employees.postman_collection.json \
+      --environment postman/preprod.env.json \
+      --reporters cli,htmlextra,junit \
+      --reporter-htmlextra-export reports/newman-employees-report.html \
+      --reporter-junit-export reports/newman-employees-junit.xml
+
+- name: Upload Newman reports
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: newman-reports
+    path: reports/newman-*.html
+
+- name: Publish test results
+  if: always()
+  uses: EnricoMi/publish-unit-test-result-action@v2
+  with:
+    files: reports/newman-*.xml
 ```
 
 #### 11. Publish Artifact to Nexus (Entregar Artefacto)
