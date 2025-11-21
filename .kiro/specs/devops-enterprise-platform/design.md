@@ -4,16 +4,16 @@
 
 ### About TechCorp Solutions
 
-**TechCorp Solutions** es una empresa ficticia de desarrollo de software fundada en 2015, con sede en Madrid, España. La empresa se especializa en crear soluciones empresariales personalizadas para clientes en los sectores de finanzas, retail y logística. Con un equipo de 50 empleados, TechCorp ha crecido constantemente pero enfrenta desafíos significativos en su proceso de entrega de software.
+**TechCorp Solutions** es una empresa ficticia de desarrollo de software fundada en 2024, con sede en Lima, Perú. La empresa se especializa en crear soluciones empresariales personalizadas para clientes en los sectores de finanzas, retail y logística. Con un equipo de 20 empleados, TechCorp ha crecido constantemente, pero enfrenta desafíos significativos en su proceso de entrega de software.
 
 ### Current Organizational Structure (Before DevOps)
 
 **Estructura Tradicional:**
-- **Departamento de Desarrollo (20 personas):** Dividido en equipos por tecnología (Backend, Frontend, Mobile)
-- **Departamento de Operaciones (8 personas):** Responsable de infraestructura, despliegues y monitoreo
-- **Departamento de QA (6 personas):** Testing manual y automatización limitada
-- **Departamento de Seguridad (3 personas):** Auditorías de seguridad trimestrales
-- **Project Managers (5 personas):** Coordinación entre departamentos
+- **Departamento de Desarrollo (10 personas):** Dividido en equipos por tecnología (Backend, Frontend, Mobile)
+- **Departamento de Operaciones (4 personas):** Responsable de infraestructura, despliegues y monitoreo
+- **Departamento de QA (2 personas):** Testing manual y automatización limitada
+- **Departamento de Seguridad (1 personas):** Auditorías de seguridad trimestrales
+- **Project Managers (3 personas):** Coordinación entre departamentos
 
 **Problemas Identificados:**
 1. **Silos Organizacionales:** Comunicación limitada entre Dev, Ops y QA
@@ -935,13 +935,31 @@ class EmployeeAPIIntegrationTest {
 - `auth.postman_collection.json`: Tests de autenticación
 - `employees.postman_collection.json`: Tests de CRUD de empleados
 
-**Ejecución en Pipeline:**
+**Reportes de Newman:**
+
+El proyecto utiliza múltiples reportes de Newman para diferentes propósitos:
+
+1. **CLI Reporter**: Output en consola para feedback inmediato durante ejecución
+2. **HTMLExtra Reporter**: Reporte visual detallado con gráficos y métricas (requiere `npm install -g newman-reporter-htmlextra`)
+3. **JUnit XML Reporter**: Formato estándar para integración con CI/CD y dashboards
+
+**Ejecución Estándar:**
 ```bash
+# Instalar reporter HTMLExtra (solo primera vez)
+npm install -g newman-reporter-htmlextra
+
+# Ejecutar colección con múltiples reportes
 newman run postman/employees.postman_collection.json \
   --environment postman/env.json \
-  --reporters cli,json \
-  --reporter-json-export newman-results.json
+  --reporters cli,htmlextra,junit \
+  --reporter-htmlextra-export reports/newman-report.html \
+  --reporter-junit-export reports/newman-junit.xml
 ```
+
+**Reportes Generados:**
+- `reports/newman-report.html`: Reporte HTML visual con gráficos, tiempos de respuesta, y detalles de cada test
+- `reports/newman-junit.xml`: Reporte XML compatible con Jenkins, GitHub Actions, y otras herramientas CI/CD
+- Consola: Output en tiempo real con resumen de tests pasados/fallados
 
 **Assertions en Postman:**
 ```javascript
@@ -954,6 +972,10 @@ pm.test("Response has correct structure", function () {
     pm.expect(jsonData).to.have.property('id');
     pm.expect(jsonData).to.have.property('email');
     pm.expect(jsonData.email).to.match(/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/);
+});
+
+pm.test("Response time is acceptable", function () {
+    pm.expect(pm.response.responseTime).to.be.below(500);
 });
 ```
 
@@ -1236,15 +1258,35 @@ graph LR
 
 #### 10. API Tests with Newman
 ```yaml
-- name: Install Newman
+- name: Install Newman and reporters
   run: npm install -g newman newman-reporter-htmlextra
 
 - name: Run Postman collections
   run: |
     newman run postman/auth.postman_collection.json \
       --environment postman/preprod.env.json \
-      --reporters cli,htmlextra \
-      --reporter-htmlextra-export newman-report.html
+      --reporters cli,htmlextra,junit \
+      --reporter-htmlextra-export reports/newman-auth-report.html \
+      --reporter-junit-export reports/newman-auth-junit.xml
+    
+    newman run postman/employees.postman_collection.json \
+      --environment postman/preprod.env.json \
+      --reporters cli,htmlextra,junit \
+      --reporter-htmlextra-export reports/newman-employees-report.html \
+      --reporter-junit-export reports/newman-employees-junit.xml
+
+- name: Upload Newman reports
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: newman-reports
+    path: reports/newman-*.html
+
+- name: Publish test results
+  if: always()
+  uses: EnricoMi/publish-unit-test-result-action@v2
+  with:
+    files: reports/newman-*.xml
 ```
 
 #### 11. Publish Artifact to Nexus (Entregar Artefacto)
