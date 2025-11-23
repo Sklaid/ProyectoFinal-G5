@@ -8,14 +8,25 @@ This project implements a complete DevOps enterprise platform for TechCorp Solut
 
 ```
 .
-├── backend/          # Spring Boot REST API
-├── frontend/         # React + TypeScript application
-├── docker/           # Docker configurations
-├── scripts/          # Automation scripts
-├── postman/          # API test collections
-├── e2e-tests/        # Selenium functional tests
-├── jmeter/           # Performance test plans
-└── docs/             # Project documentation
+├── backend/                 # Spring Boot REST API
+│   ├── src/main/java/       # Java source code
+│   ├── src/main/resources/  # Configuration and migrations
+│   ├── src/test/            # Test code
+│   ├── Dockerfile           # Backend container image
+│   └── pom.xml              # Maven configuration
+├── frontend/                # React + TypeScript application
+│   ├── src/                 # Frontend source code
+│   ├── Dockerfile           # Frontend container image
+│   ├── nginx.conf           # Nginx configuration
+│   ├── package.json         # NPM dependencies
+│   └── vite.config.ts       # Vite configuration
+├── scripts/                 # Development automation scripts
+│   ├── start-dev.sh/.bat    # Start development environment
+│   ├── stop-dev.sh/.bat     # Stop services
+│   └── cleanup.sh/.bat      # Clean up containers and volumes
+├── docker-compose.dev.yml   # Development environment setup
+├── docker-compose.prod.yml  # Production environment setup
+└── .kiro/specs/             # Project specifications and documentation
 ```
 
 ## Technology Stack
@@ -65,11 +76,15 @@ Ensure Docker Desktop is running before proceeding.
 
 ### 3. Run the development environment
 
-```bash
-# Start all services
-./scripts/start-dev.sh
+**Windows (CMD/PowerShell):**
+```cmd
+scripts\start-dev.bat
+scripts\stop-dev.bat
+```
 
-# Stop all services
+**Linux/Mac/Git Bash:**
+```bash
+./scripts/start-dev.sh
 ./scripts/stop-dev.sh
 ```
 
