@@ -10,18 +10,23 @@ import com.techcorp.devops.service.AuthService;
 import net.jqwik.api.*;
 import net.jqwik.spring.JqwikSpringSupport;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Property-based tests for authentication module
  * Feature: devops-enterprise-platform
  */
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @JqwikSpringSupport
 public class AuthenticationPropertiesTest {
@@ -37,6 +42,9 @@ public class AuthenticationPropertiesTest {
     
     @Autowired
     private JwtTokenProvider tokenProvider;
+    
+    @Autowired
+    private MockMvc mockMvc;
     
     /**
      * Feature: devops-enterprise-platform, Property 1: Valid credentials authenticate successfully
@@ -168,6 +176,61 @@ public class AuthenticationPropertiesTest {
                 .withChars('!', '@', '#', '$')
                 .ofMinLength(8)
                 .ofMaxLength(30);
+    }
+    
+    /**
+     * Feature: devops-enterprise-platform, Property 3: Protected resources require valid authentication
+     */
+    @Property(tries = 100)
+    public void protectedEndpoints_WithoutToken_ShouldReturn401(
+            @ForAll("protectedEndpoint") String endpoint) throws Exception {
+        
+        // Act: Attempt to access protected endpoint without Authorization header
+        mockMvc.perform(get(endpoint))
+                // Assert: Should return 401 Unauthorized
+                .andExpect(status().isUnauthorized());
+    }
+    
+    /**
+     * Feature: devops-enterprise-platform, Property 3: Protected resources require valid authentication
+     * Test with invalid token
+     */
+    @Property(tries = 100)
+    public void protectedEndpoints_WithInvalidToken_ShouldReturn401(
+            @ForAll("protectedEndpoint") String endpoint,
+            @ForAll("invalidToken") String invalidToken) throws Exception {
+        
+        // Act: Attempt to access protected endpoint with invalid token
+        mockMvc.perform(get(endpoint)
+                        .header("Authorization", "Bearer " + invalidToken))
+                // Assert: Should return 401 Unauthorized
+                .andExpect(status().isUnauthorized());
+    }
+    
+    @Provide
+    Arbitrary<String> protectedEndpoint() {
+        // Generate various protected endpoint paths that should require authentication
+        return Arbitraries.of(
+                "/api/employees",
+                "/api/employees/1",
+                "/api/employees/999",
+                "/api/users",
+                "/api/users/profile",
+                "/api/admin/settings",
+                "/api/data/export",
+                "/api/reports/summary"
+        );
+    }
+    
+    @Provide
+    Arbitrary<String> invalidToken() {
+        // Generate invalid JWT tokens
+        return Arbitraries.strings()
+                .withCharRange('a', 'z')
+                .numeric()
+                .withChars('.', '-', '_')
+                .ofMinLength(20)
+                .ofMaxLength(100);
     }
     
     @Provide
