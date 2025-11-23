@@ -1,5 +1,8 @@
-import { BrowserRouter } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material'
+import { AuthProvider } from './contexts/AuthContext'
+import LoginPage from './pages/LoginPage'
+import PrivateRoute from './components/PrivateRoute'
 
 const theme = createTheme({
   palette: {
@@ -18,10 +21,23 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <BrowserRouter>
-        <div>
-          <h1>DevOps Enterprise Platform</h1>
-          <p>Welcome to the platform</p>
-        </div>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+              path="/employees"
+              element={
+                <PrivateRoute>
+                  <div>
+                    <h1>Employees Page (Protected)</h1>
+                    <p>This is a protected route</p>
+                  </div>
+                </PrivateRoute>
+              }
+            />
+            <Route path="/" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>
   )
