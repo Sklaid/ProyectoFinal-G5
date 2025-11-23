@@ -288,4 +288,54 @@ public class AuthenticationPropertiesTest {
             userRepository.deleteAll();
         }
     }
+    
+    /**
+     * Feature: devops-enterprise-platform, Property 5: Passwords are securely hashed
+     */
+    @Property(tries = 100)
+    public void storedPasswords_ShouldBeSecurelyHashed(
+            @ForAll("validUserCredentials") ValidUserCredentials credentials) {
+        
+        try {
+            // Arrange: Create user with plaintext password
+            String plaintextPassword = credentials.getPassword();
+            
+            User user = User.builder()
+                    .username(credentials.getUsername())
+                    .password(passwordEncoder.encode(plaintextPassword))
+                    .email(credentials.getEmail())
+                    .role(Role.USER)
+                    .active(true)
+                    .build();
+            
+            // Act: Save user to database
+            User savedUser = userRepository.save(user);
+            
+            // Assert 1: Stored password should not match plaintext
+            assertNotEquals(plaintextPassword, savedUser.getPassword(),
+                    "Stored password should not match plaintext password");
+            
+            // Assert 2: Stored password should start with BCrypt prefix ($2a$ or $2b$ or $2y$)
+            assertTrue(savedUser.getPassword().startsWith("$2a$") || 
+                       savedUser.getPassword().startsWith("$2b$") ||
+                       savedUser.getPassword().startsWith("$2y$"),
+                    "Stored password should have BCrypt hash prefix");
+            
+            // Assert 3: Stored password should be at least 60 characters (BCrypt hash length)
+            assertTrue(savedUser.getPassword().length() >= 60,
+                    "BCrypt hash should be at least 60 characters long");
+            
+            // Assert 4: Password encoder should be able to match plaintext with hash
+            assertTrue(passwordEncoder.matches(plaintextPassword, savedUser.getPassword()),
+                    "Password encoder should be able to verify plaintext against stored hash");
+            
+            // Assert 5: Different plaintext should not match the hash
+            assertFalse(passwordEncoder.matches(plaintextPassword + "wrong", savedUser.getPassword()),
+                    "Different plaintext should not match the stored hash");
+            
+        } finally {
+            // Cleanup
+            userRepository.deleteAll();
+        }
+    }
 }
