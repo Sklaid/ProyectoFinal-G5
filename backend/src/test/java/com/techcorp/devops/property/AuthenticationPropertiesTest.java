@@ -243,4 +243,49 @@ public class AuthenticationPropertiesTest {
                 .ofMinLength(10)
                 .ofMaxLength(25);
     }
+    
+    /**
+     * Feature: devops-enterprise-platform, Property 4: Logout invalidates session
+     */
+    @Property(tries = 100)
+    public void logout_ShouldInvalidateToken(
+            @ForAll("validUserCredentials") ValidUserCredentials credentials) {
+        
+        try {
+            // Arrange: Create user and login to get a valid token
+            User user = User.builder()
+                    .username(credentials.getUsername())
+                    .password(passwordEncoder.encode(credentials.getPassword()))
+                    .email(credentials.getEmail())
+                    .role(Role.USER)
+                    .active(true)
+                    .build();
+            userRepository.save(user);
+            
+            LoginRequest loginRequest = new LoginRequest(credentials.getUsername(), credentials.getPassword());
+            AuthResponse authResponse = authService.login(loginRequest);
+            String token = authResponse.getToken();
+            
+            // Verify token is valid and not blacklisted before logout
+            assertTrue(tokenProvider.validateToken(token), 
+                    "Token should be valid before logout");
+            
+            // Act: Logout
+            authService.logout(token);
+            
+            // Assert: Token should be blacklisted after logout
+            assertTrue(authService.isTokenBlacklisted(token), 
+                    "Token should be blacklisted after logout");
+            
+            // Additional assertion: Even though token is technically valid (not expired),
+            // it should be rejected because it's blacklisted
+            assertTrue(tokenProvider.validateToken(token), 
+                    "Token should still be technically valid (not expired)");
+            assertTrue(authService.isTokenBlacklisted(token), 
+                    "But token should be in blacklist, preventing authentication");
+        } finally {
+            // Cleanup
+            userRepository.deleteAll();
+        }
+    }
 }
