@@ -23,4 +23,4 @@ ALTER TABLE users ADD CONSTRAINT chk_users_role CHECK (role IN ('ADMIN', 'USER')
 
 -- Insert default admin user (password is 'admin123' hashed with BCrypt)
 INSERT INTO users (username, password, email, role, active) 
-VALUES ('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin@techcorp.com', 'ADMIN', true);
+VALUES ('admin', '$2a$10$0NNdKPTBA/2LzOzd8IXdfeLf6wPkFia2FZrleK2hD4n1R5oe0zRiW', 'admin@techcorp.com', 'ADMIN', true);

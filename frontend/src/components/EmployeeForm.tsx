@@ -96,7 +96,7 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
     handleSubmit,
     formState: { errors }
   } = useForm<EmployeeFormData>({
-    resolver: yupResolver(validationSchema),
+    resolver: yupResolver(validationSchema) as any,
     mode: 'onBlur', // Validate on blur to provide real-time feedback
     defaultValues: initialData || {
       firstName: '',

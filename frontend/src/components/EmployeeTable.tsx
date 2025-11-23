@@ -54,11 +54,13 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
       const aValue = a[orderBy];
       const bValue = b[orderBy];
       
-      if (bValue < aValue) {
-        return order === 'asc' ? 1 : -1;
-      }
-      if (bValue > aValue) {
-        return order === 'asc' ? -1 : 1;
+      if (bValue !== undefined && aValue !== undefined) {
+        if (bValue < aValue) {
+          return order === 'asc' ? 1 : -1;
+        }
+        if (bValue > aValue) {
+          return order === 'asc' ? -1 : 1;
+        }
       }
       return 0;
     };

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EmployeeForm } from './EmployeeForm';
-import { Gender, Department, Level } from '../types/employee';
 
 /**
  * Feature: devops-enterprise-platform, Property 10: UI validation provides feedback
