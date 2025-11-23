@@ -18,9 +18,12 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Test class for Flyway database migrations.
  * Validates that migrations execute successfully and maintain database integrity.
+ * 
+ * Note: This test uses a separate profile "flyway-test" where Flyway is enabled,
+ * unlike the standard "test" profile where Flyway is disabled.
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("flyway-test")
 class FlywayMigrationTest {
 
     @Autowired
