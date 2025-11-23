@@ -23,6 +23,19 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        
+        <!-- SonarQube Properties -->
+        <sonar.projectKey>devops-enterprise-platform</sonar.projectKey>
+        <sonar.projectName>DevOps Enterprise Platform</sonar.projectName>
+        <sonar.host.url>http://localhost:9000</sonar.host.url>
+        <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
+        <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <sonar.exclusions>**/dto/**,**/entity/**,**/config/**,**/DevOpsPlatformApplication.java</sonar.exclusions>
+        <sonar.coverage.exclusions>**/dto/**,**/entity/**,**/config/**,**/DevOpsPlatformApplication.java</sonar.coverage.exclusions>
+        
+        <!-- Quality Gate Thresholds -->
+        <sonar.qualitygate.wait>true</sonar.qualitygate.wait>
+        <sonar.qualitygate.timeout>300</sonar.qualitygate.timeout>
     </properties>
 
     <dependencies>
@@ -215,6 +228,13 @@
                         <exclude>**/config/**</exclude>
                     </excludes>
                 </configuration>
+            </plugin>
+            
+            <!-- SonarQube Maven Plugin -->
+            <plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>3.10.0.2594</version>
             </plugin>
         </plugins>
     </build>
