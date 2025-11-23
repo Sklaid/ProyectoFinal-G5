@@ -21,7 +21,7 @@ if errorlevel 1 (
 
 echo.
 echo Starting services with docker-compose...
-docker-compose -f docker-compose.dev.yml up -d
+docker-compose -f ../docker-compose.dev.yml up -d
 
 echo.
 echo Waiting for services to be healthy...
@@ -49,11 +49,16 @@ echo.
 echo ==========================================
 echo Development Environment Status
 echo ==========================================
-echo Frontend:   http://localhost:3000
-echo Backend:    http://localhost:8080
+echo Frontend:   http://localhost:3000 (admin/admin123)
+echo Backend:    http://localhost:8080 (API - use Postman)
 echo SonarQube:  http://localhost:9000 (admin/admin)
-echo Nexus:      http://localhost:8081 (admin/admin123)
+echo Nexus:      http://localhost:8081 (admin/see admin.password)
 echo PostgreSQL: localhost:5432 (postgres/postgres)
+echo.
+echo Login Credentials:
+echo   Frontend/Backend: admin / admin123
+echo   SonarQube: admin / admin (change on first login)
+echo   Nexus: Get password with: docker exec devops-nexus cat /nexus-data/admin.password
 echo.
 echo To view logs: docker-compose -f docker-compose.dev.yml logs -f [service]
 echo To stop: scripts\stop-dev.bat
