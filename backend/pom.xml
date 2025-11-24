@@ -36,7 +36,25 @@
         <!-- Quality Gate Thresholds -->
         <sonar.qualitygate.wait>true</sonar.qualitygate.wait>
         <sonar.qualitygate.timeout>300</sonar.qualitygate.timeout>
+        
+        <!-- Nexus Repository Properties -->
+        <nexus.url>http://localhost:8081</nexus.url>
+        <nexus.releases.repo>maven-releases</nexus.releases.repo>
+        <nexus.snapshots.repo>maven-snapshots</nexus.snapshots.repo>
     </properties>
+
+    <distributionManagement>
+        <repository>
+            <id>nexus-releases</id>
+            <name>Nexus Release Repository</name>
+            <url>${nexus.url}/repository/${nexus.releases.repo}/</url>
+        </repository>
+        <snapshotRepository>
+            <id>nexus-snapshots</id>
+            <name>Nexus Snapshot Repository</name>
+            <url>${nexus.url}/repository/${nexus.snapshots.repo}/</url>
+        </snapshotRepository>
+    </distributionManagement>
 
     <dependencies>
         <!-- Spring Boot Starters -->
