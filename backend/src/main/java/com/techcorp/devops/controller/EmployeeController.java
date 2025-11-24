@@ -19,7 +19,6 @@ import java.util.List;
 @RequestMapping("/api/employees")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class EmployeeController {
     
     private final EmployeeService employeeService;

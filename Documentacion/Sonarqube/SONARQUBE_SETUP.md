@@ -50,7 +50,7 @@ SonarQube comes with a default "Sonar way" quality gate. For this project, we wa
 cd backend
 
 # Run Maven with SonarQube analysis (Windows PowerShell)
-mvn sonar:sonar "-Dsonar.projectKey=devops-enterprise-platform- Backend" "-Dsonar.host.url=http://localhost:9000" "-Dsonar.token=squ_9ee713d1bb15f9eba7c740a2b665d8b8db590502"
+mvn sonar:sonar "-Dsonar.projectKey=devops-enterprise-platform" "-Dsonar.host.url=http://localhost:9000" "-Dsonar.token=squ_9ee713d1bb15f9eba7c740a2b665d8b8db590502"
 
 # Note: Use quotes around each -D parameter in PowerShell to avoid parsing issues
 ```
@@ -83,10 +83,9 @@ npm run test:coverage
 sonar-scanner "-Dsonar.host.url=http://localhost:9000" "-Dsonar.token=squ_9ee713d1bb15f9eba7c740a2b665d8b8db590502"
 ```
 
-**✅ Status**: Frontend analysis completed successfully - Quality Gate PASSED  
-**View Results**: http://localhost:9000/dashboard?id=devops-enterprise-platform-frontend
-
-**Note**: On first run, you may see a Windows Firewall popup asking to allow the SonarScanner's Node.js runtime to access the network. Click "Allow access" - this is safe and only allows communication with your local SonarQube server (localhost:9000).
+# 3. Check results in SonarQube dashboard
+# http://localhost:9000/dashboard?id=devops-enterprise-platform-frontend
+```
 
 ## Viewing Results
 
