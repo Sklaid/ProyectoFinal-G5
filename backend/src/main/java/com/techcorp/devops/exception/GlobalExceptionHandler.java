@@ -19,10 +19,17 @@ import java.util.List;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     
+    // Error code constants to avoid duplication
+    private static final String ERROR_CODE_UNAUTHORIZED = "UNAUTHORIZED";
+    private static final String ERROR_CODE_VALIDATION_ERROR = "VALIDATION_ERROR";
+    private static final String ERROR_CODE_NOT_FOUND = "NOT_FOUND";
+    private static final String ERROR_CODE_FORBIDDEN = "FORBIDDEN";
+    private static final String ERROR_CODE_INTERNAL_ERROR = "INTERNAL_ERROR";
+    
     @ExceptionHandler(EntityNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleEntityNotFoundException(EntityNotFoundException ex) {
         ErrorResponse error = new ErrorResponse(
-                "NOT_FOUND",
+                ERROR_CODE_NOT_FOUND,
                 ex.getMessage(),
                 new ArrayList<>(),
                 LocalDateTime.now()
@@ -38,7 +45,7 @@ public class GlobalExceptionHandler {
         }
         
         ErrorResponse error = new ErrorResponse(
-                "VALIDATION_ERROR",
+                ERROR_CODE_VALIDATION_ERROR,
                 ex.getMessage(),
                 fieldErrors,
                 LocalDateTime.now()
@@ -54,7 +61,7 @@ public class GlobalExceptionHandler {
         );
         
         ErrorResponse error = new ErrorResponse(
-                "VALIDATION_ERROR",
+                ERROR_CODE_VALIDATION_ERROR,
                 "Invalid request data",
                 fieldErrors,
                 LocalDateTime.now()
@@ -65,7 +72,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(com.techcorp.devops.exception.AuthenticationException.class)
     public ResponseEntity<ErrorResponse> handleAuthenticationException(com.techcorp.devops.exception.AuthenticationException ex) {
         ErrorResponse error = new ErrorResponse(
-                "UNAUTHORIZED",
+                ERROR_CODE_UNAUTHORIZED,
                 ex.getMessage(),
                 new ArrayList<>(),
                 LocalDateTime.now()
@@ -77,7 +84,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex) {
         ErrorResponse error = new ErrorResponse(
-                "UNAUTHORIZED",
+                ERROR_CODE_UNAUTHORIZED,
                 "Invalid username or password",
                 new ArrayList<>(),
                 LocalDateTime.now()
@@ -89,7 +96,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ErrorResponse> handleSpringAuthenticationException(AuthenticationException ex) {
         ErrorResponse error = new ErrorResponse(
-                "UNAUTHORIZED",
+                ERROR_CODE_UNAUTHORIZED,
                 "Authentication failed",
                 new ArrayList<>(),
                 LocalDateTime.now()
@@ -108,7 +115,7 @@ public class GlobalExceptionHandler {
         }
         
         ErrorResponse error = new ErrorResponse(
-                "VALIDATION_ERROR",
+                ERROR_CODE_VALIDATION_ERROR,
                 message,
                 new ArrayList<>(),
                 LocalDateTime.now()
@@ -119,7 +126,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDeniedException(AccessDeniedException ex) {
         ErrorResponse error = new ErrorResponse(
-                "FORBIDDEN",
+                ERROR_CODE_FORBIDDEN,
                 "Access denied",
                 new ArrayList<>(),
                 LocalDateTime.now()
@@ -130,7 +137,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
         ErrorResponse error = new ErrorResponse(
-                "INTERNAL_ERROR",
+                ERROR_CODE_INTERNAL_ERROR,
                 "An unexpected error occurred",
                 new ArrayList<>(),
                 LocalDateTime.now()
