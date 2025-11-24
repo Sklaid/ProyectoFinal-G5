@@ -18,7 +18,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -68,6 +70,36 @@ class EmployeeServiceTest {
                 .skills(skills)
                 .hireDate(LocalDate.now())
                 .build();
+    }
+    
+    @Test
+    void getAllEmployees_ShouldReturnAllEmployees() {
+        // Arrange
+        Employee employee2 = Employee.builder()
+                .id(2L)
+                .firstName("Jane")
+                .lastName("Smith")
+                .email("jane.smith@example.com")
+                .phone("+0987654321")
+                .gender(Gender.FEMALE)
+                .department(Department.HR)
+                .level(Level.LEAD)
+                .skills(new HashSet<>())
+                .hireDate(LocalDate.now())
+                .build();
+        
+        List<Employee> employees = Arrays.asList(validEmployee, employee2);
+        when(employeeRepository.findAll()).thenReturn(employees);
+        
+        // Act
+        List<EmployeeDTO> result = employeeService.getAllEmployees();
+        
+        // Assert
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals(validEmployee.getEmail(), result.get(0).getEmail());
+        assertEquals(employee2.getEmail(), result.get(1).getEmail());
+        verify(employeeRepository).findAll();
     }
     
     @Test

@@ -34,7 +34,7 @@ public class EmployeeService {
         log.debug("Fetching all employees");
         return employeeRepository.findAll().stream()
                 .map(this::convertToDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
     
     @Transactional(readOnly = true)

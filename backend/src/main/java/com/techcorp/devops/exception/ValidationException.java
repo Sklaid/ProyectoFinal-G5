@@ -8,7 +8,7 @@ import java.util.List;
 @Getter
 public class ValidationException extends RuntimeException {
     
-    private final List<ValidationError> errors;
+    private final transient List<ValidationError> errors;
     
     public ValidationException(String message) {
         super(message);

@@ -9,6 +9,8 @@ import com.techcorp.devops.entity.Role;
 import com.techcorp.devops.service.AuthService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -106,43 +108,16 @@ class AuthControllerTest {
         verify(authService).login(any(LoginRequest.class));
     }
     
-    @Test
+    @ParameterizedTest
+    @CsvSource({
+        "'', password123",
+        "testuser, ''",
+        ","
+    })
     @WithMockUser
-    void login_WithEmptyUsername_ShouldReturnBadRequest() throws Exception {
+    void login_WithInvalidCredentials_ShouldReturnBadRequest(String username, String password) throws Exception {
         // Arrange
-        LoginRequest invalidRequest = new LoginRequest("", "password123");
-        
-        // Act & Assert
-        mockMvc.perform(post("/api/auth/login")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(invalidRequest)))
-                .andExpect(status().isBadRequest());
-        
-        verify(authService, never()).login(any(LoginRequest.class));
-    }
-    
-    @Test
-    @WithMockUser
-    void login_WithEmptyPassword_ShouldReturnBadRequest() throws Exception {
-        // Arrange
-        LoginRequest invalidRequest = new LoginRequest("testuser", "");
-        
-        // Act & Assert
-        mockMvc.perform(post("/api/auth/login")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(invalidRequest)))
-                .andExpect(status().isBadRequest());
-        
-        verify(authService, never()).login(any(LoginRequest.class));
-    }
-    
-    @Test
-    @WithMockUser
-    void login_WithNullCredentials_ShouldReturnBadRequest() throws Exception {
-        // Arrange
-        LoginRequest invalidRequest = new LoginRequest(null, null);
+        LoginRequest invalidRequest = new LoginRequest(username, password);
         
         // Act & Assert
         mockMvc.perform(post("/api/auth/login")

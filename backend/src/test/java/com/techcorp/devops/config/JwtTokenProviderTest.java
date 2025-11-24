@@ -51,7 +51,11 @@ class JwtTokenProviderTest {
         // Assert
         assertNotNull(token);
         assertFalse(token.isEmpty());
-        assertTrue(token.split("\\.").length == 3); // JWT has 3 parts
+        assertEquals(3, token.split("\\.").length); // JWT has 3 parts
+        
+        // Verify username can be extracted
+        String extractedUsername = jwtTokenProvider.getUsernameFromToken(token);
+        assertEquals("testuser", extractedUsername);
     }
     
     @Test
@@ -65,7 +69,7 @@ class JwtTokenProviderTest {
         // Assert
         assertNotNull(token);
         assertFalse(token.isEmpty());
-        assertTrue(token.split("\\.").length == 3);
+        assertEquals(3, token.split("\\.").length);
     }
     
     @Test
@@ -181,16 +185,4 @@ class JwtTokenProviderTest {
         assertTrue(expiration.getTime() <= expectedExpiration + 1000);
     }
     
-    @Test
-    void generateToken_ShouldIncludeSubject() {
-        // Arrange
-        String username = "testuser";
-        
-        // Act
-        String token = jwtTokenProvider.generateToken(username);
-        String extractedUsername = jwtTokenProvider.getUsernameFromToken(token);
-        
-        // Assert
-        assertEquals(username, extractedUsername);
-    }
 }

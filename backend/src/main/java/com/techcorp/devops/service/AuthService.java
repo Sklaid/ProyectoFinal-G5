@@ -6,7 +6,6 @@ import com.techcorp.devops.dto.LoginRequest;
 import com.techcorp.devops.dto.UserDTO;
 import com.techcorp.devops.entity.User;
 import com.techcorp.devops.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -21,17 +20,20 @@ import java.util.Set;
 @Service
 public class AuthService {
     
-    @Autowired
-    private AuthenticationManager authenticationManager;
-    
-    @Autowired
-    private JwtTokenProvider tokenProvider;
-    
-    @Autowired
-    private UserRepository userRepository;
+    private final AuthenticationManager authenticationManager;
+    private final JwtTokenProvider tokenProvider;
+    private final UserRepository userRepository;
     
     // In-memory blacklist for invalidated tokens (in production, use Redis)
     private final Set<String> tokenBlacklist = new HashSet<>();
+    
+    public AuthService(AuthenticationManager authenticationManager, 
+                      JwtTokenProvider tokenProvider, 
+                      UserRepository userRepository) {
+        this.authenticationManager = authenticationManager;
+        this.tokenProvider = tokenProvider;
+        this.userRepository = userRepository;
+    }
     
     @Transactional
     public AuthResponse login(LoginRequest loginRequest) {

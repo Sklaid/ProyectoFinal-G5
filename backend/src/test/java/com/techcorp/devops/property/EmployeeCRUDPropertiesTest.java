@@ -74,7 +74,7 @@ public class EmployeeCRUDPropertiesTest {
                 .build();
         
         // Act - Update employee
-        EmployeeDTO updated = employeeService.updateEmployee(created.getId(), updateDTO);
+        employeeService.updateEmployee(created.getId(), updateDTO);
         
         // Act - Read employee
         EmployeeDTO retrieved = employeeService.getEmployeeById(created.getId());

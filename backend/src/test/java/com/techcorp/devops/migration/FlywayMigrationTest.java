@@ -76,21 +76,21 @@ class FlywayMigrationTest {
         assertFalse(history.isEmpty(), "Migration history should not be empty");
 
         // Verify all migrations succeeded
-        for (Map<String, Object> record : history) {
-            Boolean success = (Boolean) record.get("success");
-            assertTrue(success, "Migration " + record.get("version") + " should have succeeded");
+        for (Map<String, Object> migrationRecord : history) {
+            Boolean success = (Boolean) migrationRecord.get("success");
+            assertTrue(success, "Migration " + migrationRecord.get("version") + " should have succeeded");
         }
 
         // Verify V1 migration exists
         boolean v1Exists = history.stream()
-                .anyMatch(record -> record.get("version") != null && 
-                                   record.get("version").toString().startsWith("1"));
+                .anyMatch(migrationRecord -> migrationRecord.get("version") != null && 
+                                   migrationRecord.get("version").toString().startsWith("1"));
         assertTrue(v1Exists, "V1 migration should be in history");
 
         // Verify V2 migration exists
         boolean v2Exists = history.stream()
-                .anyMatch(record -> record.get("version") != null && 
-                                   record.get("version").toString().startsWith("2"));
+                .anyMatch(migrationRecord -> migrationRecord.get("version") != null && 
+                                   migrationRecord.get("version").toString().startsWith("2"));
         assertTrue(v2Exists, "V2 migration should be in history");
     }
 

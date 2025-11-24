@@ -1,7 +1,5 @@
 package com.techcorp.devops.property;
 
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
 import net.jqwik.spring.JqwikSpringSupport;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
