@@ -121,7 +121,7 @@ describe('App', () => {
   });
 
   it('should have correct provider hierarchy', () => {
-    const { container } = render(<App />);
+    render(<App />);
     
     // ErrorBoundary should be the outermost wrapper
     const errorBoundary = screen.getByTestId('error-boundary');

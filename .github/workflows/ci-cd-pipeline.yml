@@ -285,11 +285,469 @@ jobs:
           path: frontend/npm-audit-report.json
           retention-days: 7
 
+  # Job 6: Deploy to Pre-Production
+  deploy-preprod:
+    name: Deploy to Pre-Production
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan]
+    if: |
+      success() &&
+      (github.ref == 'refs/heads/develop' || 
+       github.ref == 'refs/heads/main' || 
+       startsWith(github.ref, 'refs/heads/release/') ||
+       inputs.deploy_enabled)
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/
+      
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Deploy with Docker Compose
+        run: |
+          echo "🚀 Deploying to pre-production environment..."
+          
+          # Stop any existing containers
+          docker-compose -f docker-compose.dev.yml down || true
+          
+          # Start services
+          docker-compose -f docker-compose.dev.yml up -d postgres
+          
+          # Wait for PostgreSQL to be ready
+          echo "⏳ Waiting for PostgreSQL to be ready..."
+          timeout 60 bash -c 'until docker exec devops-postgres pg_isready -U postgres; do sleep 2; done'
+          
+          # Start backend
+          docker-compose -f docker-compose.dev.yml up -d backend
+          
+          # Start frontend
+          docker-compose -f docker-compose.dev.yml up -d frontend
+          
+          echo "✅ Services started"
+      
+      - name: Wait for services to be healthy
+        run: |
+          echo "⏳ Waiting for services to be healthy..."
+          
+          # Wait for backend health check
+          echo "Checking backend health..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "✅ Backend is healthy"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "❌ Backend health check timeout"
+              docker logs devops-backend
+              exit 1
+            fi
+            echo "Attempt $i/30: Backend not ready yet..."
+            sleep 10
+          done
+          
+          # Wait for frontend health check
+          echo "Checking frontend health..."
+          for i in {1..15}; do
+            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "✅ Frontend is healthy"
+              break
+            fi
+            if [ $i -eq 15 ]; then
+              echo "❌ Frontend health check timeout"
+              docker logs devops-frontend
+              exit 1
+            fi
+            echo "Attempt $i/15: Frontend not ready yet..."
+            sleep 5
+          done
+          
+          echo "✅ All services are healthy and ready"
+      
+      - name: Display deployment info
+        run: |
+          echo "## Pre-Production Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend URL:** http://localhost:8080" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend URL:** http://localhost:3000" >> $GITHUB_STEP_SUMMARY
+          echo "- **Database:** PostgreSQL on localhost:5432" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Container Status" >> $GITHUB_STEP_SUMMARY
+          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" >> $GITHUB_STEP_SUMMARY
+
+  # Job 7: Integration Tests
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [deploy-preprod]
+    if: ${{ !inputs.skip_tests }}
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: devops_platform_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Run integration tests
+        run: |
+          echo "🧪 Running integration tests..."
+          mvn verify -P integration-tests \
+            -Dspring.datasource.url=jdbc:postgresql://localhost:5432/devops_platform_test \
+            -Dspring.datasource.username=postgres \
+            -Dspring.datasource.password=postgres
+        working-directory: ./backend
+      
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: backend/target/failsafe-reports/
+          retention-days: 7
+
+  # Job 8: API Tests with Newman
+  api-tests:
+    name: API Tests (Newman)
+    runs-on: ubuntu-latest
+    needs: [deploy-preprod]
+    if: ${{ !inputs.skip_tests }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Install Newman
+        run: |
+          npm install -g newman
+          npm install -g newman-reporter-htmlextra
+      
+      - name: Wait for API to be ready
+        run: |
+          echo "⏳ Waiting for API to be ready..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "✅ API is ready"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "❌ API not ready after 5 minutes"
+              exit 1
+            fi
+            sleep 10
+          done
+      
+      - name: Run Auth API tests
+        run: |
+          echo "🧪 Running authentication API tests..."
+          newman run postman/auth.postman_collection.json \
+            -e postman/dev.env.json \
+            --reporters cli,htmlextra,junit \
+            --reporter-htmlextra-export reports/auth-report.html \
+            --reporter-junit-export reports/auth-junit.xml \
+            --bail
+        continue-on-error: true
+      
+      - name: Run Employees API tests
+        run: |
+          echo "🧪 Running employees API tests..."
+          newman run postman/employees.postman_collection.json \
+            -e postman/dev.env.json \
+            --reporters cli,htmlextra,junit \
+            --reporter-htmlextra-export reports/employees-report.html \
+            --reporter-junit-export reports/employees-junit.xml \
+            --bail
+        continue-on-error: true
+      
+      - name: Upload Newman reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-reports
+          path: reports/
+          retention-days: 7
+      
+      - name: Publish test results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: reports/*-junit.xml
+          check_name: API Test Results
+
+  # Job 9: Publish Artifacts to Nexus
+  publish-artifacts:
+    name: Publish Artifacts to Nexus
+    runs-on: ubuntu-latest
+    needs: [integration-tests, api-tests]
+    if: |
+      success() &&
+      (github.ref == 'refs/heads/develop' || 
+       github.ref == 'refs/heads/main' || 
+       startsWith(github.ref, 'refs/heads/release/'))
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Configure Maven settings
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << 'EOF'
+          <settings>
+            <servers>
+              <server>
+                <id>nexus-snapshots</id>
+                <username>${{ secrets.NEXUS_USERNAME }}</username>
+                <password>${{ secrets.NEXUS_PASSWORD }}</password>
+              </server>
+              <server>
+                <id>nexus-releases</id>
+                <username>${{ secrets.NEXUS_USERNAME }}</username>
+                <password>${{ secrets.NEXUS_PASSWORD }}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+      
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | sed 's/-SNAPSHOT//')
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            echo "artifact_type=RELEASE" >> $GITHUB_OUTPUT
+          else
+            VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            echo "artifact_type=SNAPSHOT" >> $GITHUB_OUTPUT
+          fi
+        working-directory: ./backend
+      
+      - name: Deploy to Nexus
+        run: |
+          echo "📦 Publishing artifact to Nexus..."
+          echo "Version: ${{ steps.version.outputs.version }}"
+          echo "Type: ${{ steps.version.outputs.artifact_type }}"
+          
+          mvn deploy -DskipTests \
+            -Dmaven.install.skip=true \
+            -DaltDeploymentRepository=nexus::default::${{ secrets.NEXUS_URL }}/repository/maven-${{ steps.version.outputs.artifact_type == 'RELEASE' && 'releases' || 'snapshots' }}
+        working-directory: ./backend
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+      
+      - name: Tag artifact
+        run: |
+          echo "🏷️ Tagging artifact..."
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          TAG="v${{ steps.version.outputs.version }}-build.${{ github.run_number }}"
+          git tag -a "$TAG" -m "Build ${{ github.run_number }}: ${{ steps.version.outputs.artifact_type }}"
+          git push origin "$TAG" || echo "Tag already exists or push failed"
+
+  # Job 10: Functional Tests with Selenium
+  functional-tests:
+    name: Functional Tests (Selenium)
+    runs-on: ubuntu-latest
+    needs: [deploy-preprod]
+    if: ${{ !inputs.skip_tests }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Set up Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+      
+      - name: Install ChromeDriver
+        run: |
+          CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d'.' -f1)
+          echo "Chrome version: $CHROME_VERSION"
+          
+          # ChromeDriver is managed by WebDriverManager in the code
+          echo "ChromeDriver will be managed by WebDriverManager"
+      
+      - name: Wait for application to be ready
+        run: |
+          echo "⏳ Waiting for application to be ready..."
+          for i in {1..30}; do
+            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "✅ Application is ready"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "❌ Application not ready"
+              exit 1
+            fi
+            sleep 10
+          done
+      
+      - name: Run Selenium tests
+        run: |
+          echo "🧪 Running Selenium functional tests..."
+          mvn test -Dtest=**/*E2ETest \
+            -Dselenium.baseUrl=http://localhost:3000 \
+            -Dselenium.headless=true
+        working-directory: ./e2e-tests
+        continue-on-error: true
+      
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selenium-screenshots
+          path: e2e-tests/screenshots/
+          retention-days: 7
+      
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selenium-reports
+          path: e2e-tests/target/surefire-reports/
+          retention-days: 7
+
+  # Job 11: Performance Tests with JMeter
+  performance-tests:
+    name: Performance Tests (JMeter)
+    runs-on: ubuntu-latest
+    needs: [deploy-preprod]
+    if: ${{ !inputs.skip_tests }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+      
+      - name: Install JMeter
+        run: |
+          echo "📥 Installing Apache JMeter..."
+          wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.3.tgz
+          tar -xzf apache-jmeter-5.6.3.tgz
+          echo "JMETER_HOME=$(pwd)/apache-jmeter-5.6.3" >> $GITHUB_ENV
+          echo "$(pwd)/apache-jmeter-5.6.3/bin" >> $GITHUB_PATH
+      
+      - name: Wait for API to be ready
+        run: |
+          echo "⏳ Waiting for API to be ready..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "✅ API is ready"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "❌ API not ready"
+              exit 1
+            fi
+            sleep 10
+          done
+      
+      - name: Run JMeter auth tests
+        run: |
+          echo "🧪 Running JMeter authentication performance tests..."
+          jmeter -n \
+            -t jmeter-tests/auth-load-test.jmx \
+            -l jmeter-tests/results/auth-results-ci.jtl \
+            -e -o jmeter-tests/reports/auth-report-ci
+        continue-on-error: true
+      
+      - name: Run JMeter employee API tests
+        run: |
+          echo "🧪 Running JMeter employee API performance tests..."
+          jmeter -n \
+            -t jmeter-tests/employee-api-load-test.jmx \
+            -l jmeter-tests/results/employee-results-ci.jtl \
+            -e -o jmeter-tests/reports/employee-report-ci
+        continue-on-error: true
+      
+      - name: Check performance thresholds
+        run: |
+          echo "📊 Checking performance thresholds..."
+          python3 jmeter-tests/check-performance-thresholds.py \
+            jmeter-tests/results/auth-results-ci.jtl \
+            jmeter-tests/results/employee-results-ci.jtl
+        continue-on-error: true
+      
+      - name: Upload JMeter reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmeter-reports
+          path: jmeter-tests/reports/
+          retention-days: 7
+      
+      - name: Upload JMeter results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmeter-results
+          path: jmeter-tests/results/
+          retention-days: 7
+
   # Summary Job
   pipeline-summary:
     name: Pipeline Summary
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan]
+    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan, deploy-preprod, integration-tests, api-tests, publish-artifacts, functional-tests, performance-tests]
     if: always()
     
     steps:
@@ -307,14 +765,21 @@ jobs:
           echo "- Unit Tests: ${{ needs.unit-tests.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- SonarQube Analysis: ${{ needs.sonarqube-analysis.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Security Scan: ${{ needs.security-scan.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Deploy Pre-Prod: ${{ needs.deploy-preprod.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Integration Tests: ${{ needs.integration-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- API Tests: ${{ needs.api-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Publish Artifacts: ${{ needs.publish-artifacts.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Functional Tests: ${{ needs.functional-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Performance Tests: ${{ needs.performance-tests.result }}" >> $GITHUB_STEP_SUMMARY
       
-      - name: Fail if any job failed
+      - name: Fail if any critical job failed
         if: |
           needs.build-backend.result == 'failure' ||
           needs.build-frontend.result == 'failure' ||
           needs.unit-tests.result == 'failure' ||
           needs.sonarqube-analysis.result == 'failure' ||
-          needs.security-scan.result == 'failure'
+          needs.security-scan.result == 'failure' ||
+          needs.deploy-preprod.result == 'failure'
         run: |
-          echo "❌ Pipeline failed - one or more jobs failed"
+          echo "❌ Pipeline failed - one or more critical jobs failed"
           exit 1

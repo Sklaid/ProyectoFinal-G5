@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { employeeService } from './employeeService';
 import apiClient from './apiClient';
-import { Employee, EmployeeFormData } from '../types/employee';
+import { Employee, EmployeeFormData, Gender, Department, Level } from '../types/employee';
 
 // Mock the apiClient
 vi.mock('./apiClient');
@@ -20,11 +20,13 @@ describe('employeeService', () => {
           lastName: 'Doe',
           email: 'john@example.com',
           phone: '1234567890',
-          gender: 'MALE',
-          department: 'IT',
-          level: 'SENIOR',
+          gender: Gender.MALE,
+          department: Department.IT,
+          level: Level.SENIOR,
           skills: ['Java', 'Python'],
-          hireDate: '2023-01-01'
+          hireDate: '2023-01-01',
+          createdAt: '2023-01-01T00:00:00Z',
+          updatedAt: '2023-01-01T00:00:00Z'
         },
         {
           id: 2,
@@ -32,11 +34,13 @@ describe('employeeService', () => {
           lastName: 'Smith',
           email: 'jane@example.com',
           phone: '0987654321',
-          gender: 'FEMALE',
-          department: 'HR',
-          level: 'MID',
+          gender: Gender.FEMALE,
+          department: Department.HR,
+          level: Level.MID,
           skills: ['Communication'],
-          hireDate: '2023-02-01'
+          hireDate: '2023-02-01',
+          createdAt: '2023-02-01T00:00:00Z',
+          updatedAt: '2023-02-01T00:00:00Z'
         }
       ];
 
@@ -65,11 +69,13 @@ describe('employeeService', () => {
         lastName: 'Doe',
         email: 'john@example.com',
         phone: '1234567890',
-        gender: 'MALE',
-        department: 'IT',
-        level: 'SENIOR',
+        gender: Gender.MALE,
+        department: Department.IT,
+        level: Level.SENIOR,
         skills: ['Java', 'Python'],
-        hireDate: '2023-01-01'
+        hireDate: '2023-01-01',
+        createdAt: '2023-01-01T00:00:00Z',
+        updatedAt: '2023-01-01T00:00:00Z'
       };
 
       vi.mocked(apiClient.get).mockResolvedValue({ data: mockEmployee });
@@ -105,7 +111,17 @@ describe('employeeService', () => {
 
       const mockCreatedEmployee: Employee = {
         id: 1,
-        ...formData
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        gender: Gender.MALE,
+        department: Department.IT,
+        level: Level.SENIOR,
+        skills: formData.skills,
+        hireDate: formData.hireDate,
+        createdAt: '2023-01-01T00:00:00Z',
+        updatedAt: '2023-01-01T00:00:00Z'
       };
 
       vi.mocked(apiClient.post).mockResolvedValue({ data: mockCreatedEmployee });
@@ -153,7 +169,17 @@ describe('employeeService', () => {
 
       const mockUpdatedEmployee: Employee = {
         id: 1,
-        ...formData
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        gender: Gender.MALE,
+        department: Department.IT,
+        level: Level.LEAD,
+        skills: formData.skills,
+        hireDate: formData.hireDate,
+        createdAt: '2023-01-01T00:00:00Z',
+        updatedAt: '2023-01-01T00:00:00Z'
       };
 
       vi.mocked(apiClient.put).mockResolvedValue({ data: mockUpdatedEmployee });

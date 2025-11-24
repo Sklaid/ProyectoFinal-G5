@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { EmployeeFormPage } from './EmployeeFormPage';
 import { employeeService } from '../services/employeeService';
+import { Gender, Department, Level } from '../types/employee';
 
 const mockNavigate = vi.fn();
 let mockUseParams = vi.fn();
@@ -44,11 +45,13 @@ describe('EmployeeFormPage', () => {
       lastName: 'Doe',
       email: 'john@example.com',
       phone: '1234567890',
-      gender: 'MALE',
-      department: 'ENGINEERING',
-      level: 'SENIOR',
+      gender: Gender.MALE,
+      department: Department.IT,
+      level: Level.SENIOR,
       skills: ['Java', 'Python'],
-      hireDate: '2023-01-01'
+      hireDate: '2023-01-01',
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
     };
 
     mockUseParams.mockReturnValue({ id: '1' });
@@ -110,11 +113,13 @@ describe('EmployeeFormPage', () => {
       lastName: 'Doe',
       email: 'john@example.com',
       phone: '1234567890',
-      gender: 'MALE',
-      department: 'ENGINEERING',
-      level: 'SENIOR',
+      gender: Gender.MALE,
+      department: Department.IT,
+      level: Level.SENIOR,
       skills: ['Java'],
-      hireDate: '2023-01-01'
+      hireDate: '2023-01-01',
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
     });
 
     render(
@@ -135,11 +140,13 @@ describe('EmployeeFormPage', () => {
       lastName: 'Doe',
       email: 'john@example.com',
       phone: '1234567890',
-      gender: 'MALE',
-      department: 'ENGINEERING',
-      level: 'SENIOR',
+      gender: Gender.MALE,
+      department: Department.IT,
+      level: Level.SENIOR,
       skills: ['Java'],
-      hireDate: '2023-01-01'
+      hireDate: '2023-01-01',
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
     };
 
     mockUseParams.mockReturnValue({ id: '1' });
@@ -183,11 +190,13 @@ describe('EmployeeFormPage', () => {
       lastName: 'Doe',
       email: 'john@example.com',
       phone: '1234567890',
-      gender: 'MALE',
-      department: 'ENGINEERING',
-      level: 'SENIOR',
+      gender: Gender.MALE,
+      department: Department.IT,
+      level: Level.SENIOR,
       skills: ['Java'],
-      hireDate: '2023-01-01'
+      hireDate: '2023-01-01',
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
     };
 
     mockUseParams.mockReturnValue({ id: '123' });
@@ -210,12 +219,14 @@ describe('EmployeeFormPage', () => {
       firstName: 'John',
       lastName: 'Doe',
       email: 'john@example.com',
-      phone: null,
-      gender: 'MALE',
-      department: 'ENGINEERING',
-      level: 'SENIOR',
+      phone: undefined,
+      gender: Gender.MALE,
+      department: Department.IT,
+      level: Level.SENIOR,
       skills: ['Java'],
-      hireDate: '2023-01-01'
+      hireDate: '2023-01-01',
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
     };
 
     mockUseParams.mockReturnValue({ id: '1' });
@@ -275,11 +286,13 @@ describe('EmployeeFormPage', () => {
       lastName: 'Doe',
       email: 'john@example.com',
       phone: '1234567890',
-      gender: 'MALE',
-      department: 'IT',
-      level: 'SENIOR',
+      gender: Gender.MALE,
+      department: Department.IT,
+      level: Level.SENIOR,
       skills: ['Java'],
-      hireDate: '2023-01-01'
+      hireDate: '2023-01-01',
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
     };
 
     mockUseParams.mockReturnValue({ id: '1' });
@@ -323,11 +336,13 @@ describe('EmployeeFormPage', () => {
       lastName: 'Doe',
       email: 'john@example.com',
       phone: '1234567890',
-      gender: 'MALE',
-      department: 'IT',
-      level: 'SENIOR',
+      gender: Gender.MALE,
+      department: Department.IT,
+      level: Level.SENIOR,
       skills: ['Java'],
-      hireDate: '2023-01-01'
+      hireDate: '2023-01-01',
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
     };
 
     mockUseParams.mockReturnValue({ id: '1' });
@@ -414,11 +429,13 @@ describe('EmployeeFormPage', () => {
         lastName: 'Doe',
         email: 'john@example.com',
         phone: '1234567890',
-        gender: 'MALE',
-        department: 'IT',
-        level: 'SENIOR',
+        gender: Gender.MALE,
+        department: Department.IT,
+        level: Level.SENIOR,
         skills: ['Java'],
-        hireDate: '2023-01-01'
+        hireDate: '2023-01-01',
+        createdAt: '2023-01-01T00:00:00Z',
+        updatedAt: '2023-01-01T00:00:00Z'
       }), 200))
     );
 
