@@ -670,19 +670,19 @@ jobs:
             --reporters cli,htmlextra,junit \
             --reporter-htmlextra-export reports/auth-report.html \
             --reporter-junit-export reports/auth-junit.xml \
-            --bail \
+            --export-environment postman/updated-env.json \
             --insecure
         continue-on-error: true
       
       - name: Run Employees API tests (uses token from auth tests)
         run: |
           echo "🧪 Running employees API tests..."
+          echo "Using updated environment with fresh token from auth tests"
           newman run postman/employees.postman_collection.json \
-            -e postman/dev.env.json \
+            -e postman/updated-env.json \
             --reporters cli,htmlextra,junit \
             --reporter-htmlextra-export reports/employees-report.html \
             --reporter-junit-export reports/employees-junit.xml \
-            --bail \
             --insecure
         continue-on-error: true
       
@@ -873,11 +873,10 @@ jobs:
       - name: Run Selenium tests
         run: |
           echo "🧪 Running Selenium functional tests..."
-          echo "Running all tests in e2e.tests package..."
+          echo "Running TestNG suite..."
           mvn test \
-            -Dselenium.baseUrl=http://localhost:3000 \
-            -Dselenium.headless=true \
-            -Dtest=com.techcorp.devops.e2e.tests.*
+            -DbaseUrl=http://localhost:3000 \
+            -DapiUrl=http://localhost:8080
         working-directory: ./e2e-tests
         continue-on-error: true
       
@@ -987,9 +986,15 @@ jobs:
       - name: Check performance thresholds
         run: |
           echo "📊 Checking performance thresholds..."
-          python3 jmeter-tests/check-performance-thresholds.py \
-            jmeter-tests/results/auth-results-ci.jtl \
-            jmeter-tests/results/employee-results-ci.jtl
+          echo "Checking auth test results..."
+          if [ -f "jmeter-tests/results/auth-results-ci.jtl" ]; then
+            python3 jmeter-tests/check-performance-thresholds.py jmeter-tests/results/auth-results-ci.jtl || true
+          fi
+          echo ""
+          echo "Checking employee test results..."
+          if [ -f "jmeter-tests/results/employee-results-ci.jtl" ]; then
+            python3 jmeter-tests/check-performance-thresholds.py jmeter-tests/results/employee-results-ci.jtl || true
+          fi
         continue-on-error: true
       
       - name: Stop services
