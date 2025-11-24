@@ -169,7 +169,7 @@ jobs:
 
   # Job 4: SonarQube Analysis
   sonarqube-analysis:
-    name: SonarQube Analysis
+    name: SonarQube Analysis (Multi-Module)
     runs-on: ubuntu-latest
     needs: [unit-tests]
     if: ${{ !inputs.skip_tests }}
@@ -187,7 +187,12 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
       
-      - name: Build backend for SonarQube
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Build backend (compile classes for analysis)
         run: mvn clean compile -DskipTests
         working-directory: ./backend
       
@@ -197,56 +202,42 @@ jobs:
           name: backend-coverage
           path: backend/target/site/jacoco/
       
-      - name: Verify coverage report downloaded
-        run: |
-          echo "Verifying downloaded coverage report..."
-          if [ -f "target/site/jacoco/jacoco.xml" ]; then
-            echo "✅ JaCoCo XML report downloaded successfully"
-            ls -lh target/site/jacoco/
-            echo "File size:"
-            du -h target/site/jacoco/jacoco.xml
-          else
-            echo "❌ JaCoCo XML report not found after download"
-            ls -R target/
-            exit 1
-          fi
-        working-directory: ./backend
-      
-      - name: Run SonarQube analysis
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: |
-          mvn sonar:sonar \
-            -Dsonar.projectKey=Sklaid_ProyectoFinal-G5 \
-            -Dsonar.organization=sklaid \
-            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
-            -Dsonar.java.binaries=target/classes \
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
-        working-directory: ./backend
-      
       - name: Download frontend coverage report
         uses: actions/download-artifact@v4
         with:
           name: frontend-coverage
           path: frontend/coverage/
       
-      - name: Verify frontend coverage report
+      - name: Verify coverage reports
         run: |
-          echo "Verifying frontend coverage report..."
-          if [ -f "frontend/coverage/lcov.info" ]; then
-            echo "✅ Frontend coverage report found"
-            ls -lh frontend/coverage/
+          echo "📊 Verifying coverage reports..."
+          echo ""
+          echo "Backend coverage:"
+          if [ -f "backend/target/site/jacoco/jacoco.xml" ]; then
+            echo "✅ Backend JaCoCo report found"
+            ls -lh backend/target/site/jacoco/jacoco.xml
           else
-            echo "❌ Frontend coverage report not found"
-            ls -R frontend/coverage/ || echo "Coverage directory not found"
+            echo "❌ Backend coverage report missing"
+            exit 1
+          fi
+          
+          echo ""
+          echo "Frontend coverage:"
+          if [ -f "frontend/coverage/lcov.info" ]; then
+            echo "✅ Frontend LCOV report found"
+            ls -lh frontend/coverage/lcov.info
+          else
+            echo "⚠️ Frontend coverage report missing (will continue)"
           fi
       
-      - name: Create SonarCloud configuration for monorepo
+      - name: Create SonarCloud multi-module configuration
         run: |
           cat > sonar-project.properties << 'EOF'
-          # SonarCloud Monorepo Configuration
+          # ============================================
+          # SonarCloud Multi-Module Configuration
+          # ============================================
+          
+          # Project identification
           sonar.projectKey=Sklaid_ProyectoFinal-G5
           sonar.organization=sklaid
           sonar.projectName=DevOps Enterprise Platform
@@ -255,51 +246,97 @@ jobs:
           # Source encoding
           sonar.sourceEncoding=UTF-8
           
-          # Modules
+          # Define modules
           sonar.modules=backend,frontend
           
-          # Backend module
+          # ============================================
+          # Backend Module (Java/Spring Boot)
+          # ============================================
           backend.sonar.projectName=Backend (Java)
+          backend.sonar.projectBaseDir=backend
           backend.sonar.sources=src/main/java
           backend.sonar.tests=src/test/java
           backend.sonar.java.binaries=target/classes
           backend.sonar.java.test.binaries=target/test-classes
           backend.sonar.java.source=17
           backend.sonar.java.target=17
-          backend.sonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
-          backend.sonar.exclusions=**/dto/**,**/entity/**,**/config/**,**/DevOpsPlatformApplication.java
-          backend.sonar.coverage.exclusions=**/dto/**,**/entity/**,**/config/**,**/DevOpsPlatformApplication.java
+          backend.sonar.java.libraries=target/classes
           
-          # Frontend module
+          # Backend coverage
+          backend.sonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+          
+          # Backend exclusions
+          backend.sonar.exclusions=**/dto/**,**/entity/**,**/config/**,**/DevOpsPlatformApplication.java,**/build-wrapper-dump.json
+          backend.sonar.coverage.exclusions=**/dto/**,**/entity/**,**/config/**,**/DevOpsPlatformApplication.java
+          backend.sonar.test.exclusions=**/test/**
+          
+          # ============================================
+          # Frontend Module (TypeScript/React)
+          # ============================================
           frontend.sonar.projectName=Frontend (TypeScript/React)
+          frontend.sonar.projectBaseDir=frontend
           frontend.sonar.sources=src
           frontend.sonar.tests=src
-          frontend.sonar.test.inclusions=**/*.test.ts,**/*.test.tsx
-          frontend.sonar.exclusions=**/node_modules/**,**/dist/**,**/build/**,**/coverage/**,**/*.config.ts,**/*.config.js,**/vite-env.d.ts
+          
+          # Frontend test patterns
+          frontend.sonar.test.inclusions=**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx
+          
+          # Frontend exclusions
+          frontend.sonar.exclusions=**/node_modules/**,**/dist/**,**/build/**,**/coverage/**,**/*.config.ts,**/*.config.js,**/vite-env.d.ts,**/*.test.ts,**/*.test.tsx
+          frontend.sonar.coverage.exclusions=**/node_modules/**,**/dist/**,**/build/**,**/coverage/**,**/*.test.ts,**/*.test.tsx,**/*.config.ts,**/*.config.js,**/main.tsx,**/vite-env.d.ts
+          
+          # Frontend coverage
           frontend.sonar.javascript.lcov.reportPaths=coverage/lcov.info
           frontend.sonar.typescript.lcov.reportPaths=coverage/lcov.info
           
+          # TypeScript configuration
+          frontend.sonar.typescript.tsconfigPath=tsconfig.json
+          
+          # ============================================
+          # Global Settings
+          # ============================================
+          
           # Quality Gate
           sonar.qualitygate.wait=false
+          
+          # SCM
+          sonar.scm.provider=git
+          sonar.scm.disabled=false
+          
+          # Logging
+          sonar.log.level=INFO
+          sonar.verbose=false
           EOF
           
-          echo "✅ SonarCloud monorepo configuration created"
+          echo "✅ SonarCloud multi-module configuration created"
+          echo ""
+          echo "Configuration file:"
           cat sonar-project.properties
       
-      - name: Install SonarScanner
+      - name: Install SonarScanner CLI
         run: |
+          echo "📥 Downloading SonarScanner CLI..."
           wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
           unzip -q sonar-scanner-cli-5.0.1.3006-linux.zip
           echo "$(pwd)/sonar-scanner-5.0.1.3006-linux/bin" >> $GITHUB_PATH
+          echo "✅ SonarScanner CLI installed"
       
-      - name: Run SonarQube analysis for entire project
+      - name: Run SonarCloud analysis (Multi-Module)
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          echo "🚀 Starting SonarCloud multi-module analysis..."
+          echo ""
           sonar-scanner \
             -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+            -Dsonar.token=${{ secrets.SONAR_TOKEN }} \
+            -Dsonar.scm.revision=${{ github.sha }} \
+            -Dsonar.branch.name=${{ github.ref_name }}
+          
+          echo ""
+          echo "✅ SonarCloud analysis completed"
       
       - name: Check SonarQube Quality Gate
         env:
