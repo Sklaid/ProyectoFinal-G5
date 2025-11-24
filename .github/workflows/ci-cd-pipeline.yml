@@ -1571,7 +1571,7 @@ jobs:
           fi
       
       - name: Send Slack notification on success
-        if: steps.status.outputs.status == 'success' && secrets.SLACK_WEBHOOK_URL != ''
+        if: steps.status.outputs.status == 'success'
         uses: slackapi/slack-github-action@v1.25.0
         with:
           payload: |
@@ -1623,7 +1623,7 @@ jobs:
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
       
       - name: Send Slack notification on failure
-        if: steps.status.outputs.status == 'failure' && secrets.SLACK_WEBHOOK_URL != ''
+        if: steps.status.outputs.status == 'failure'
         uses: slackapi/slack-github-action@v1.25.0
         with:
           payload: |
@@ -1900,7 +1900,7 @@ jobs:
           echo "⚠️ **Action Required:** Investigate the failure and fix issues before next deployment." >> $GITHUB_STEP_SUMMARY
       
       - name: Send rollback notification
-        if: secrets.SLACK_WEBHOOK_URL != ''
+        if: always()
         uses: slackapi/slack-github-action@v1.25.0
         with:
           payload: |
