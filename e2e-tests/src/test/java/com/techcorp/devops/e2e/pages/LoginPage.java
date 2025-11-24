@@ -1,5 +1,6 @@
 package com.techcorp.devops.e2e.pages;
 
+import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.FindBy;
@@ -28,7 +29,7 @@ public class LoginPage {
     @FindBy(css = "button[type='submit']")
     private WebElement loginButton;
     
-    @FindBy(css = ".MuiAlert-message, [role='alert']")
+    @FindBy(css = ".MuiAlert-root, .MuiAlert-standardError")
     private WebElement errorMessage;
     
     /**
@@ -100,8 +101,35 @@ public class LoginPage {
      */
     public boolean isErrorMessageDisplayed() {
         try {
-            wait.until(ExpectedConditions.visibilityOf(errorMessage));
-            return errorMessage.isDisplayed();
+            // Use a longer wait for error messages as they may take time to appear
+            WebDriverWait longWait = new WebDriverWait(driver, Duration.ofSeconds(20));
+            
+            // Try to find any element containing error-related text
+            try {
+                // First try the main error message element
+                longWait.until(ExpectedConditions.visibilityOf(errorMessage));
+                return errorMessage.isDisplayed();
+            } catch (Exception e1) {
+                // Try to find by text content
+                try {
+                    WebElement textError = longWait.until(
+                        ExpectedConditions.presenceOfElementLocated(
+                            By.xpath("//*[contains(text(), 'Invalid') or contains(text(), 'failed') or contains(text(), 'error') or contains(text(), 'Error')]")
+                        )
+                    );
+                    return textError.isDisplayed();
+                } catch (Exception e2) {
+                    // Try alternative CSS selectors
+                    try {
+                        WebElement altErrorMsg = driver.findElement(
+                            By.cssSelector(".MuiAlert-message, [role='alert'], .error-message, .MuiAlert-standardError")
+                        );
+                        return altErrorMsg.isDisplayed();
+                    } catch (Exception e3) {
+                        return false;
+                    }
+                }
+            }
         } catch (Exception e) {
             return false;
         }

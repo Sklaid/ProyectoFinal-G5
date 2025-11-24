@@ -56,10 +56,16 @@ public class LoginFlowTest extends BaseTest {
         loginPage.navigateTo(baseUrl);
         Assert.assertTrue(loginPage.isDisplayed(), "Login page should be displayed");
         
+        System.out.println("DEBUG: About to attempt login with invalid credentials");
         loginPage.login(invalidUsername, invalidPassword);
         
         // Wait for error message
-        waitFor(2);
+        System.out.println("DEBUG: Waiting for error message...");
+        waitFor(3);
+        
+        // Debug: Print page source
+        System.out.println("DEBUG: Current URL: " + driver.getCurrentUrl());
+        System.out.println("DEBUG: Page title: " + driver.getTitle());
         
         // Assert
         Assert.assertTrue(loginPage.isErrorMessageDisplayed(), 

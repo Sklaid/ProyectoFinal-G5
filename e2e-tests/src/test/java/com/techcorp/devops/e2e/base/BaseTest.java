@@ -38,7 +38,15 @@ public abstract class BaseTest {
         
         // Configure Chrome options
         ChromeOptions options = new ChromeOptions();
-        options.addArguments("--headless"); // Run in headless mode for CI/CD
+        
+        // Check if headless mode is requested via system property
+        String headlessMode = System.getProperty("selenium.headless", "false");
+        if ("true".equalsIgnoreCase(headlessMode)) {
+            options.addArguments("--headless"); // Run in headless mode for CI/CD
+        }
+        // Note: Material-UI dropdowns don't work properly in headless mode
+        // Run without --headless for local development and testing
+        
         options.addArguments("--no-sandbox");
         options.addArguments("--disable-dev-shm-usage");
         options.addArguments("--disable-gpu");

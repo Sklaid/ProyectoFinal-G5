@@ -661,23 +661,32 @@ jobs:
       - name: Create reports directory
         run: mkdir -p reports
       
-      - name: Run Auth API tests (includes login to get token)
+      - name: Login to get fresh token
         run: |
-          echo "🧪 Running authentication API tests..."
-          echo "Note: Auth tests will login first to get a valid token"
+          echo "🔐 Logging in to get fresh authentication token..."
           newman run postman/auth.postman_collection.json \
             -e postman/dev.env.json \
+            --folder "Login with Valid Credentials" \
+            --export-environment postman/updated-env.json \
+            --reporters cli \
+            --insecure
+        continue-on-error: false
+      
+      - name: Run Auth API tests
+        run: |
+          echo "🧪 Running authentication API tests..."
+          newman run postman/auth.postman_collection.json \
+            -e postman/updated-env.json \
             --reporters cli,htmlextra,junit \
             --reporter-htmlextra-export reports/auth-report.html \
             --reporter-junit-export reports/auth-junit.xml \
-            --export-environment postman/updated-env.json \
             --insecure
         continue-on-error: true
       
-      - name: Run Employees API tests (uses token from auth tests)
+      - name: Run Employees API tests (uses token from login)
         run: |
           echo "🧪 Running employees API tests..."
-          echo "Using updated environment with fresh token from auth tests"
+          echo "Using fresh token from login step"
           newman run postman/employees.postman_collection.json \
             -e postman/updated-env.json \
             --reporters cli,htmlextra,junit \

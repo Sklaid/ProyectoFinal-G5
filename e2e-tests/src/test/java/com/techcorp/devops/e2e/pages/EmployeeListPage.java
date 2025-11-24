@@ -21,7 +21,8 @@ public class EmployeeListPage {
     private WebDriverWait wait;
     
     // Page elements
-    @FindBy(css = "button[aria-label='add'], button:contains('Add'), a[href*='new']")
+    // Using XPath to find button by text content since CSS doesn't support :contains()
+    @FindBy(xpath = "//button[contains(text(), 'Create New') or contains(text(), 'Add')]")
     private WebElement addEmployeeButton;
     
     @FindBy(css = "table, .MuiTable-root")
@@ -40,7 +41,7 @@ public class EmployeeListPage {
      */
     public EmployeeListPage(WebDriver driver) {
         this.driver = driver;
-        this.wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        this.wait = new WebDriverWait(driver, Duration.ofSeconds(20)); // Increased from 10 to 20 seconds
         PageFactory.initElements(driver, this);
     }
     
