@@ -254,19 +254,22 @@ jobs:
           # ============================================
           backend.sonar.projectName=Backend (Java)
           backend.sonar.projectBaseDir=backend
-          backend.sonar.sources=src/main/java
-          backend.sonar.tests=src/test/java
+          
+          # Source directories (simplified like Maven does)
+          backend.sonar.sources=src,pom.xml
+          backend.sonar.tests=src/test
+          
+          # Java-specific settings
           backend.sonar.java.binaries=target/classes
           backend.sonar.java.test.binaries=target/test-classes
           backend.sonar.java.source=17
           backend.sonar.java.target=17
-          backend.sonar.java.libraries=target/classes
           
           # Backend coverage
           backend.sonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
           
           # Backend exclusions
-          backend.sonar.exclusions=**/dto/**,**/entity/**,**/config/**,**/DevOpsPlatformApplication.java,**/build-wrapper-dump.json
+          backend.sonar.exclusions=**/dto/**,**/entity/**,**/config/**,**/DevOpsPlatformApplication.java,**/target/**
           backend.sonar.coverage.exclusions=**/dto/**,**/entity/**,**/config/**,**/DevOpsPlatformApplication.java
           backend.sonar.test.exclusions=**/test/**
           
