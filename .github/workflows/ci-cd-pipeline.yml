@@ -882,10 +882,11 @@ jobs:
       - name: Run Selenium tests
         run: |
           echo "🧪 Running Selenium functional tests..."
-          echo "Running TestNG suite..."
+          echo "Running TestNG suite in headless mode..."
           mvn test \
             -DbaseUrl=http://localhost:3000 \
-            -DapiUrl=http://localhost:8080
+            -DapiUrl=http://localhost:8080 \
+            -Dselenium.headless=true
         working-directory: ./e2e-tests
         continue-on-error: true
       

@@ -42,15 +42,27 @@ public abstract class BaseTest {
         // Check if headless mode is requested via system property
         String headlessMode = System.getProperty("selenium.headless", "false");
         if ("true".equalsIgnoreCase(headlessMode)) {
-            options.addArguments("--headless"); // Run in headless mode for CI/CD
+            options.addArguments("--headless=new"); // Use new headless mode (Chrome 109+)
+            System.out.println("Running in headless mode");
         }
-        // Note: Material-UI dropdowns don't work properly in headless mode
-        // Run without --headless for local development and testing
         
+        // Essential options for CI/CD environments (especially Linux)
         options.addArguments("--no-sandbox");
         options.addArguments("--disable-dev-shm-usage");
         options.addArguments("--disable-gpu");
+        options.addArguments("--disable-software-rasterizer");
+        options.addArguments("--disable-extensions");
+        options.addArguments("--disable-setuid-sandbox");
         options.addArguments("--window-size=1920,1080");
+        options.addArguments("--start-maximized");
+        options.addArguments("--remote-allow-origins=*");
+        
+        // Disable unnecessary features for stability
+        options.addArguments("--disable-blink-features=AutomationControlled");
+        options.setExperimentalOption("excludeSwitches", new String[]{"enable-automation"});
+        options.setExperimentalOption("useAutomationExtension", false);
+        
+        System.out.println("Chrome options configured for: " + (headlessMode.equalsIgnoreCase("true") ? "CI/CD" : "Local"));
         
         // Initialize WebDriver
         driver = new ChromeDriver(options);
