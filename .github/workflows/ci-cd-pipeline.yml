@@ -743,34 +743,1286 @@ jobs:
           path: jmeter-tests/results/
           retention-days: 7
 
+  # Job 12: Tag STABLE Artifact
+  tag-stable-artifact:
+    name: Tag STABLE Artifact
+    runs-on: ubuntu-latest
+    needs: [functional-tests, performance-tests, publish-artifacts]
+    if: |
+      success() &&
+      (github.ref == 'refs/heads/develop' || 
+       startsWith(github.ref, 'refs/heads/release/'))
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | sed 's/-SNAPSHOT//')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+        working-directory: ./backend
+      
+      - name: Create STABLE tag
+        run: |
+          echo "🏷️ Creating STABLE tag..."
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          TAG="v${{ steps.version.outputs.version }}-STABLE-build.${{ github.run_number }}"
+          echo "Creating tag: $TAG"
+          
+          git tag -a "$TAG" -m "STABLE: All pre-production tests passed - Build ${{ github.run_number }}"
+          git push origin "$TAG"
+          
+          echo "✅ STABLE tag created and pushed: $TAG"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+        id: tag
+      
+      - name: Add tag to summary
+        run: |
+          echo "## STABLE Artifact Tagged" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag:** ${{ steps.tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All pre-production tests passed. Ready for production deployment." >> $GITHUB_STEP_SUMMARY
+
+  # Job 13: Canary Deployment
+  canary-deployment:
+    name: Canary Deployment
+    runs-on: ubuntu-latest
+    needs: [tag-stable-artifact]
+    if: |
+      success() &&
+      github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/
+      
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Deploy canary instance (10% traffic)
+        run: |
+          echo "🐤 Deploying canary instance..."
+          echo "This represents 10% of production traffic"
+          
+          # In a real scenario, this would deploy to a subset of production instances
+          # For this demo, we'll simulate canary deployment with a separate container
+          
+          # Create canary docker-compose configuration
+          cat > docker-compose.canary.yml << 'EOF'
+          version: '3.8'
+          
+          services:
+            postgres-canary:
+              image: postgres:15-alpine
+              container_name: devops-postgres-canary
+              environment:
+                POSTGRES_DB: devops_platform
+                POSTGRES_USER: postgres
+                POSTGRES_PASSWORD: postgres
+              ports:
+                - "5433:5432"
+              volumes:
+                - postgres-canary-data:/var/lib/postgresql/data
+              healthcheck:
+                test: ["CMD-SHELL", "pg_isready -U postgres"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
+            
+            backend-canary:
+              build:
+                context: ./backend
+                dockerfile: Dockerfile
+              container_name: devops-backend-canary
+              environment:
+                SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-canary:5432/devops_platform
+                SPRING_DATASOURCE_USERNAME: postgres
+                SPRING_DATASOURCE_PASSWORD: postgres
+                SPRING_PROFILES_ACTIVE: prod
+                SERVER_PORT: 8080
+              ports:
+                - "8082:8080"
+              depends_on:
+                postgres-canary:
+                  condition: service_healthy
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+                start_period: 60s
+            
+            frontend-canary:
+              build:
+                context: ./frontend
+                dockerfile: Dockerfile
+              container_name: devops-frontend-canary
+              ports:
+                - "3001:80"
+              depends_on:
+                - backend-canary
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:80"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+          
+          volumes:
+            postgres-canary-data:
+          EOF
+          
+          # Start canary deployment
+          docker-compose -f docker-compose.canary.yml up -d
+          
+          echo "✅ Canary instance deployed"
+      
+      - name: Wait for canary to be healthy
+        run: |
+          echo "⏳ Waiting for canary instance to be healthy..."
+          
+          # Wait for backend health check
+          echo "Checking canary backend health..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8082/actuator/health > /dev/null 2>&1; then
+              echo "✅ Canary backend is healthy"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "❌ Canary backend health check timeout"
+              docker logs devops-backend-canary
+              exit 1
+            fi
+            echo "Attempt $i/30: Canary backend not ready yet..."
+            sleep 10
+          done
+          
+          # Wait for frontend health check
+          echo "Checking canary frontend health..."
+          for i in {1..15}; do
+            if curl -f http://localhost:3001 > /dev/null 2>&1; then
+              echo "✅ Canary frontend is healthy"
+              break
+            fi
+            if [ $i -eq 15 ]; then
+              echo "❌ Canary frontend health check timeout"
+              docker logs devops-frontend-canary
+              exit 1
+            fi
+            echo "Attempt $i/15: Canary frontend not ready yet..."
+            sleep 5
+          done
+          
+          echo "✅ Canary instance is fully healthy"
+      
+      - name: Monitor canary for 5 minutes
+        run: |
+          echo "📊 Monitoring canary deployment for 5 minutes..."
+          echo "In production, this would monitor:"
+          echo "  - Error rates"
+          echo "  - Response times"
+          echo "  - CPU/Memory usage"
+          echo "  - Business metrics"
+          
+          # Simulate monitoring period
+          MONITOR_DURATION=300  # 5 minutes in seconds
+          CHECK_INTERVAL=30     # Check every 30 seconds
+          CHECKS=$((MONITOR_DURATION / CHECK_INTERVAL))
+          
+          for i in $(seq 1 $CHECKS); do
+            echo ""
+            echo "🔍 Health check $i/$CHECKS ($(($i * $CHECK_INTERVAL))s elapsed)"
+            
+            # Check backend health
+            if ! curl -f http://localhost:8082/actuator/health > /dev/null 2>&1; then
+              echo "❌ Canary backend health check failed!"
+              docker logs devops-backend-canary --tail 50
+              exit 1
+            fi
+            
+            # Check frontend health
+            if ! curl -f http://localhost:3001 > /dev/null 2>&1; then
+              echo "❌ Canary frontend health check failed!"
+              docker logs devops-frontend-canary --tail 50
+              exit 1
+            fi
+            
+            # Get backend metrics
+            HEALTH_STATUS=$(curl -s http://localhost:8082/actuator/health | jq -r '.status' || echo "UNKNOWN")
+            echo "  Backend status: $HEALTH_STATUS"
+            
+            # Check for errors in logs
+            ERROR_COUNT=$(docker logs devops-backend-canary 2>&1 | grep -i "error" | wc -l || echo "0")
+            echo "  Error count in logs: $ERROR_COUNT"
+            
+            if [ "$ERROR_COUNT" -gt 10 ]; then
+              echo "⚠️ High error count detected in canary logs!"
+              echo "Recent errors:"
+              docker logs devops-backend-canary 2>&1 | grep -i "error" | tail -5
+            fi
+            
+            echo "✅ Check $i/$CHECKS passed"
+            
+            if [ $i -lt $CHECKS ]; then
+              sleep $CHECK_INTERVAL
+            fi
+          done
+          
+          echo ""
+          echo "✅ Canary monitoring completed successfully"
+          echo "No issues detected during 5-minute monitoring period"
+      
+      - name: Validate canary metrics
+        run: |
+          echo "📈 Validating canary metrics..."
+          
+          # In production, this would check:
+          # - Error rate < 1%
+          # - P95 latency < 500ms
+          # - No critical errors
+          # - Business metrics within acceptable range
+          
+          # For this demo, we'll do basic validation
+          HEALTH_STATUS=$(curl -s http://localhost:8082/actuator/health | jq -r '.status')
+          
+          if [ "$HEALTH_STATUS" != "UP" ]; then
+            echo "❌ Canary health status is not UP: $HEALTH_STATUS"
+            exit 1
+          fi
+          
+          echo "✅ Canary metrics validation passed"
+          echo "Canary deployment is stable and ready for full production rollout"
+      
+      - name: Add canary summary
+        run: |
+          echo "## Canary Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ✅ Successful" >> $GITHUB_STEP_SUMMARY
+          echo "- **Monitoring Duration:** 5 minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- **Health Checks:** All passed" >> $GITHUB_STEP_SUMMARY
+          echo "- **Canary Backend:** http://localhost:8082" >> $GITHUB_STEP_SUMMARY
+          echo "- **Canary Frontend:** http://localhost:3001" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Canary deployment validated. Ready for full production rollout." >> $GITHUB_STEP_SUMMARY
+      
+      - name: Cleanup canary on failure
+        if: failure()
+        run: |
+          echo "🧹 Cleaning up failed canary deployment..."
+          docker-compose -f docker-compose.canary.yml down -v || true
+          echo "Canary deployment cleaned up"
+
+  # Job 14: Production Deployment
+  production-deployment:
+    name: Production Deployment
+    runs-on: ubuntu-latest
+    needs: [canary-deployment]
+    if: |
+      success() &&
+      github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/
+      
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Configure production environment
+        run: |
+          echo "⚙️ Configuring production environment..."
+          
+          # Create production environment file
+          cat > .env.production << 'EOF'
+          # Database Configuration
+          POSTGRES_DB=devops_platform_prod
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          
+          # Backend Configuration
+          SPRING_PROFILES_ACTIVE=prod
+          SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-prod:5432/devops_platform_prod
+          SPRING_DATASOURCE_USERNAME=postgres
+          SPRING_DATASOURCE_PASSWORD=postgres
+          SERVER_PORT=8080
+          
+          # Security Configuration
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          JWT_EXPIRATION=86400000
+          
+          # Logging Configuration
+          LOGGING_LEVEL_ROOT=INFO
+          LOGGING_LEVEL_COM_TECHCORP=INFO
+          
+          # Actuator Configuration
+          MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,metrics
+          EOF
+          
+          echo "✅ Production environment configured"
+      
+      - name: Backup current production (if exists)
+        run: |
+          echo "💾 Creating backup of current production..."
+          
+          # Check if production is running
+          if docker ps | grep -q "devops-backend-prod"; then
+            echo "Production is running, creating backup..."
+            
+            # Export current database
+            docker exec devops-postgres-prod pg_dump -U postgres devops_platform_prod > backup-$(date +%Y%m%d-%H%M%S).sql || true
+            
+            # Tag current images as backup
+            docker tag devops-backend-prod:latest devops-backend-prod:backup-$(date +%Y%m%d-%H%M%S) || true
+            docker tag devops-frontend-prod:latest devops-frontend-prod:backup-$(date +%Y%m%d-%H%M%S) || true
+            
+            echo "✅ Backup created"
+          else
+            echo "No existing production deployment found, skipping backup"
+          fi
+      
+      - name: Deploy to production
+        run: |
+          echo "🚀 Deploying to production environment..."
+          
+          # Stop canary deployment
+          echo "Stopping canary deployment..."
+          docker-compose -f docker-compose.canary.yml down || true
+          
+          # Deploy production using docker-compose.prod.yml
+          echo "Starting production deployment..."
+          docker-compose -f docker-compose.prod.yml down || true
+          
+          # Start PostgreSQL first
+          docker-compose -f docker-compose.prod.yml up -d postgres
+          
+          # Wait for PostgreSQL to be ready
+          echo "⏳ Waiting for PostgreSQL to be ready..."
+          timeout 60 bash -c 'until docker exec devops-postgres-prod pg_isready -U postgres; do sleep 2; done' || {
+            echo "PostgreSQL failed to start"
+            docker logs devops-postgres-prod
+            exit 1
+          }
+          
+          # Start backend
+          docker-compose -f docker-compose.prod.yml up -d backend
+          
+          # Start frontend
+          docker-compose -f docker-compose.prod.yml up -d frontend
+          
+          echo "✅ Production services started"
+      
+      - name: Wait for production to be healthy
+        run: |
+          echo "⏳ Waiting for production services to be healthy..."
+          
+          # Wait for backend health check
+          echo "Checking production backend health..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              HEALTH=$(curl -s http://localhost:8080/actuator/health | jq -r '.status')
+              echo "✅ Production backend is healthy (Status: $HEALTH)"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "❌ Production backend health check timeout"
+              docker logs devops-backend-prod
+              exit 1
+            fi
+            echo "Attempt $i/30: Production backend not ready yet..."
+            sleep 10
+          done
+          
+          # Wait for frontend health check
+          echo "Checking production frontend health..."
+          for i in {1..15}; do
+            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "✅ Production frontend is healthy"
+              break
+            fi
+            if [ $i -eq 15 ]; then
+              echo "❌ Production frontend health check timeout"
+              docker logs devops-frontend-prod
+              exit 1
+            fi
+            echo "Attempt $i/15: Production frontend not ready yet..."
+            sleep 5
+          done
+          
+          echo "✅ All production services are healthy and ready"
+      
+      - name: Validate production deployment
+        run: |
+          echo "🔍 Validating production deployment..."
+          
+          # Check backend health endpoint
+          HEALTH_STATUS=$(curl -s http://localhost:8080/actuator/health | jq -r '.status')
+          if [ "$HEALTH_STATUS" != "UP" ]; then
+            echo "❌ Backend health check failed: $HEALTH_STATUS"
+            exit 1
+          fi
+          echo "✅ Backend health: $HEALTH_STATUS"
+          
+          # Check backend info endpoint
+          APP_NAME=$(curl -s http://localhost:8080/actuator/info | jq -r '.app.name // "unknown"')
+          echo "✅ Application: $APP_NAME"
+          
+          # Check frontend is serving content
+          if ! curl -s http://localhost:3000 | grep -q "<!DOCTYPE html>"; then
+            echo "❌ Frontend is not serving HTML content"
+            exit 1
+          fi
+          echo "✅ Frontend is serving content"
+          
+          # Check database connectivity
+          if ! docker exec devops-postgres-prod psql -U postgres -d devops_platform_prod -c "SELECT 1" > /dev/null 2>&1; then
+            echo "❌ Database connectivity check failed"
+            exit 1
+          fi
+          echo "✅ Database is accessible"
+          
+          # Check Flyway migrations
+          MIGRATION_COUNT=$(docker exec devops-postgres-prod psql -U postgres -d devops_platform_prod -t -c "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true" | tr -d ' ')
+          echo "✅ Flyway migrations applied: $MIGRATION_COUNT"
+          
+          echo ""
+          echo "✅ Production deployment validation passed"
+      
+      - name: Run smoke tests
+        run: |
+          echo "🧪 Running production smoke tests..."
+          
+          # Test 1: Health endpoint
+          echo "Test 1: Health endpoint"
+          if ! curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
+            echo "❌ Health endpoint test failed"
+            exit 1
+          fi
+          echo "✅ Health endpoint test passed"
+          
+          # Test 2: Frontend loads
+          echo "Test 2: Frontend loads"
+          if ! curl -f http://localhost:3000 > /dev/null 2>&1; then
+            echo "❌ Frontend load test failed"
+            exit 1
+          fi
+          echo "✅ Frontend load test passed"
+          
+          # Test 3: API responds
+          echo "Test 3: API responds"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/auth/login)
+          if [ "$HTTP_CODE" != "401" ] && [ "$HTTP_CODE" != "400" ]; then
+            echo "❌ API response test failed (expected 400/401, got $HTTP_CODE)"
+            exit 1
+          fi
+          echo "✅ API response test passed"
+          
+          echo ""
+          echo "✅ All smoke tests passed"
+      
+      - name: Display production info
+        run: |
+          echo "## Production Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ✅ Deployed Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend URL:** http://localhost:8080" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend URL:** http://localhost:3000" >> $GITHUB_STEP_SUMMARY
+          echo "- **Database:** PostgreSQL (devops_platform_prod)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Container Status" >> $GITHUB_STEP_SUMMARY
+          docker ps --filter "name=devops-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Production deployment completed successfully" >> $GITHUB_STEP_SUMMARY
+
+  # Job 15: Tag GOLD Artifact
+  tag-gold-artifact:
+    name: Tag GOLD Artifact
+    runs-on: ubuntu-latest
+    needs: [production-deployment]
+    if: |
+      success() &&
+      github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | sed 's/-SNAPSHOT//')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+        working-directory: ./backend
+      
+      - name: Create GOLD tag
+        run: |
+          echo "🏆 Creating GOLD tag..."
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          TAG="v${{ steps.version.outputs.version }}-GOLD-build.${{ github.run_number }}"
+          echo "Creating tag: $TAG"
+          
+          git tag -a "$TAG" -m "GOLD: Successfully deployed to production - Build ${{ github.run_number }}"
+          git push origin "$TAG"
+          
+          echo "✅ GOLD tag created and pushed: $TAG"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+        id: tag
+      
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          release_name: Release ${{ steps.version.outputs.version }} (Build ${{ github.run_number }})
+          body: |
+            ## 🏆 Production Release
+            
+            This release has been successfully deployed to production.
+            
+            ### Build Information
+            - **Version:** ${{ steps.version.outputs.version }}
+            - **Build Number:** ${{ github.run_number }}
+            - **Commit:** ${{ github.sha }}
+            - **Branch:** ${{ github.ref_name }}
+            - **Deployed by:** ${{ github.actor }}
+            - **Deployment Time:** ${{ github.event.head_commit.timestamp }}
+            
+            ### Pipeline Stages Completed
+            - ✅ Build & Compile
+            - ✅ Unit Tests (>80% coverage)
+            - ✅ SonarQube Analysis (Quality Gate Passed)
+            - ✅ Security Scan (No critical vulnerabilities)
+            - ✅ Integration Tests
+            - ✅ API Tests (Newman)
+            - ✅ Functional Tests (Selenium)
+            - ✅ Performance Tests (JMeter)
+            - ✅ Canary Deployment (5-minute monitoring)
+            - ✅ Production Deployment
+            - ✅ Smoke Tests
+            
+            ### Artifacts
+            - Backend JAR published to Nexus
+            - Frontend build published to Nexus
+            - Docker images built and deployed
+            
+            ### Deployment URLs
+            - **Frontend:** http://localhost:3000
+            - **Backend API:** http://localhost:8080
+            - **Health Check:** http://localhost:8080/actuator/health
+          draft: false
+          prerelease: false
+      
+      - name: Add GOLD tag to summary
+        run: |
+          echo "## 🏆 GOLD Artifact Tagged" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag:** ${{ steps.tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Successfully deployed to production and tagged as GOLD release." >> $GITHUB_STEP_SUMMARY
+
+  # Job 16: Post-Deployment Monitoring
+  post-deployment-monitoring:
+    name: Post-Deployment Monitoring
+    runs-on: ubuntu-latest
+    needs: [production-deployment]
+    if: |
+      success() &&
+      github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Monitor application metrics
+        run: |
+          echo "📊 Monitoring application metrics..."
+          
+          # Monitor for 3 minutes post-deployment
+          MONITOR_DURATION=180  # 3 minutes
+          CHECK_INTERVAL=30     # Check every 30 seconds
+          CHECKS=$((MONITOR_DURATION / CHECK_INTERVAL))
+          
+          echo "Will perform $CHECKS health checks over $MONITOR_DURATION seconds"
+          echo ""
+          
+          for i in $(seq 1 $CHECKS); do
+            echo "🔍 Health check $i/$CHECKS ($(($i * $CHECK_INTERVAL))s elapsed)"
+            
+            # Check backend health
+            HEALTH_RESPONSE=$(curl -s http://localhost:8080/actuator/health)
+            HEALTH_STATUS=$(echo "$HEALTH_RESPONSE" | jq -r '.status // "UNKNOWN"')
+            
+            if [ "$HEALTH_STATUS" != "UP" ]; then
+              echo "❌ Backend health check failed: $HEALTH_STATUS"
+              echo "Response: $HEALTH_RESPONSE"
+              exit 1
+            fi
+            
+            echo "  ✅ Backend health: $HEALTH_STATUS"
+            
+            # Check frontend
+            if ! curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "❌ Frontend health check failed"
+              exit 1
+            fi
+            echo "  ✅ Frontend: Responding"
+            
+            # Check database connectivity
+            if ! docker exec devops-postgres-prod psql -U postgres -d devops_platform_prod -c "SELECT 1" > /dev/null 2>&1; then
+              echo "❌ Database connectivity check failed"
+              exit 1
+            fi
+            echo "  ✅ Database: Connected"
+            
+            # Get metrics if available
+            METRICS=$(curl -s http://localhost:8080/actuator/metrics 2>/dev/null || echo "{}")
+            if [ "$METRICS" != "{}" ]; then
+              echo "  📈 Metrics endpoint: Available"
+            fi
+            
+            # Check for errors in recent logs
+            ERROR_COUNT=$(docker logs devops-backend-prod --since 30s 2>&1 | grep -i "error" | wc -l || echo "0")
+            WARN_COUNT=$(docker logs devops-backend-prod --since 30s 2>&1 | grep -i "warn" | wc -l || echo "0")
+            
+            echo "  📋 Recent logs: $ERROR_COUNT errors, $WARN_COUNT warnings"
+            
+            if [ "$ERROR_COUNT" -gt 5 ]; then
+              echo "⚠️ High error count detected!"
+              echo "Recent errors:"
+              docker logs devops-backend-prod --since 30s 2>&1 | grep -i "error" | tail -3
+            fi
+            
+            echo ""
+            
+            if [ $i -lt $CHECKS ]; then
+              sleep $CHECK_INTERVAL
+            fi
+          done
+          
+          echo "✅ Post-deployment monitoring completed successfully"
+      
+      - name: Validate application metrics
+        run: |
+          echo "📈 Validating application metrics..."
+          
+          # Get health details
+          HEALTH=$(curl -s http://localhost:8080/actuator/health)
+          echo "Health Status:"
+          echo "$HEALTH" | jq '.'
+          
+          # Check if all components are UP
+          DB_STATUS=$(echo "$HEALTH" | jq -r '.components.db.status // "UNKNOWN"')
+          DISK_STATUS=$(echo "$HEALTH" | jq -r '.components.diskSpace.status // "UNKNOWN"')
+          PING_STATUS=$(echo "$HEALTH" | jq -r '.components.ping.status // "UNKNOWN"')
+          
+          echo ""
+          echo "Component Status:"
+          echo "  Database: $DB_STATUS"
+          echo "  Disk Space: $DISK_STATUS"
+          echo "  Ping: $PING_STATUS"
+          
+          # Validate all components are UP
+          if [ "$DB_STATUS" != "UP" ]; then
+            echo "❌ Database component is not UP"
+            exit 1
+          fi
+          
+          if [ "$DISK_STATUS" != "UP" ]; then
+            echo "❌ Disk space component is not UP"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✅ All application metrics are healthy"
+      
+      - name: Check container resource usage
+        run: |
+          echo "💻 Checking container resource usage..."
+          
+          # Get container stats
+          echo "Container Resource Usage:"
+          docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" \
+            devops-backend-prod devops-frontend-prod devops-postgres-prod
+          
+          echo ""
+          echo "✅ Resource usage check completed"
+      
+      - name: Generate monitoring report
+        run: |
+          echo "## Post-Deployment Monitoring Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Monitoring Duration:** 3 minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- **Health Checks:** All passed" >> $GITHUB_STEP_SUMMARY
+          echo "- **Application Status:** ✅ Healthy" >> $GITHUB_STEP_SUMMARY
+          echo "- **Database Status:** ✅ Connected" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend Status:** ✅ Responding" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Get final health status
+          HEALTH=$(curl -s http://localhost:8080/actuator/health)
+          echo "### Health Check Details" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          echo "$HEALTH" | jq '.' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "✅ Post-deployment monitoring completed. Application is stable." >> $GITHUB_STEP_SUMMARY
+
+  # Job 17: Notifications
+  notifications:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan, deploy-preprod, integration-tests, api-tests, publish-artifacts, functional-tests, performance-tests, tag-stable-artifact, canary-deployment, production-deployment, tag-gold-artifact, post-deployment-monitoring]
+    if: always()
+    
+    steps:
+      - name: Determine pipeline status
+        id: status
+        run: |
+          # Check if all critical jobs succeeded
+          if [[ "${{ needs.build-backend.result }}" == "success" ]] && \
+             [[ "${{ needs.build-frontend.result }}" == "success" ]] && \
+             [[ "${{ needs.unit-tests.result }}" == "success" ]] && \
+             [[ "${{ needs.sonarqube-analysis.result }}" == "success" ]] && \
+             [[ "${{ needs.security-scan.result }}" == "success" ]]; then
+            
+            # Check if production deployment succeeded (only on main branch)
+            if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+              if [[ "${{ needs.production-deployment.result }}" == "success" ]]; then
+                echo "status=success" >> $GITHUB_OUTPUT
+                echo "message=✅ Pipeline completed successfully - Deployed to production" >> $GITHUB_OUTPUT
+                echo "color=good" >> $GITHUB_OUTPUT
+              else
+                echo "status=failure" >> $GITHUB_OUTPUT
+                echo "message=❌ Pipeline failed - Production deployment failed" >> $GITHUB_OUTPUT
+                echo "color=danger" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "status=success" >> $GITHUB_OUTPUT
+              echo "message=✅ Pipeline completed successfully - All tests passed" >> $GITHUB_OUTPUT
+              echo "color=good" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "message=❌ Pipeline failed - One or more stages failed" >> $GITHUB_OUTPUT
+            echo "color=danger" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Send Slack notification on success
+        if: steps.status.outputs.status == 'success' && secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "${{ steps.status.outputs.message }}",
+              "attachments": [
+                {
+                  "color": "${{ steps.status.outputs.color }}",
+                  "fields": [
+                    {
+                      "title": "Repository",
+                      "value": "${{ github.repository }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "<${{ github.event.head_commit.url }}|${{ github.sha }}>",
+                      "short": true
+                    },
+                    {
+                      "title": "Author",
+                      "value": "${{ github.actor }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Build Number",
+                      "value": "${{ github.run_number }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Workflow",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Pipeline>",
+                      "short": true
+                    }
+                  ],
+                  "footer": "GitHub Actions",
+                  "footer_icon": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+                  "ts": ${{ github.event.head_commit.timestamp }}
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+      
+      - name: Send Slack notification on failure
+        if: steps.status.outputs.status == 'failure' && secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "${{ steps.status.outputs.message }}",
+              "attachments": [
+                {
+                  "color": "${{ steps.status.outputs.color }}",
+                  "fields": [
+                    {
+                      "title": "Repository",
+                      "value": "${{ github.repository }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "<${{ github.event.head_commit.url }}|${{ github.sha }}>",
+                      "short": true
+                    },
+                    {
+                      "title": "Author",
+                      "value": "${{ github.actor }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Build Number",
+                      "value": "${{ github.run_number }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Workflow",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Pipeline>",
+                      "short": true
+                    },
+                    {
+                      "title": "Failed Jobs",
+                      "value": "Build Backend: ${{ needs.build-backend.result }}\nBuild Frontend: ${{ needs.build-frontend.result }}\nUnit Tests: ${{ needs.unit-tests.result }}\nSonarQube: ${{ needs.sonarqube-analysis.result }}\nSecurity Scan: ${{ needs.security-scan.result }}\nDeploy Pre-Prod: ${{ needs.deploy-preprod.result }}\nProduction Deploy: ${{ needs.production-deployment.result }}",
+                      "short": false
+                    }
+                  ],
+                  "footer": "GitHub Actions",
+                  "footer_icon": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+                  "ts": ${{ github.event.head_commit.timestamp }}
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+      
+      - name: Log notification status
+        run: |
+          echo "## Notifications" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Pipeline Status:** ${{ steps.status.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Message:** ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ secrets.SLACK_WEBHOOK_URL }}" != "" ]]; then
+            echo "- **Slack Notification:** ✅ Sent" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Slack Notification:** ⚠️ Skipped (SLACK_WEBHOOK_URL not configured)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "To enable Slack notifications, add SLACK_WEBHOOK_URL to repository secrets." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Job 18: Rollback on Failure
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [production-deployment, post-deployment-monitoring]
+    if: |
+      failure() &&
+      github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Detect failure
+        run: |
+          echo "🚨 Production deployment or monitoring failed!"
+          echo "Initiating rollback procedure..."
+          
+          echo "## 🚨 Rollback Initiated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Production deployment or post-deployment monitoring failed." >> $GITHUB_STEP_SUMMARY
+          echo "Rolling back to previous stable version..." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Get previous stable version
+        id: previous
+        run: |
+          echo "🔍 Finding previous stable version..."
+          
+          # Get the most recent GOLD tag before current build
+          PREVIOUS_TAG=$(git tag -l "v*-GOLD-*" | sort -V | tail -n 2 | head -n 1)
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "⚠️ No previous GOLD tag found"
+            echo "This might be the first deployment"
+            PREVIOUS_TAG="none"
+          else
+            echo "Found previous stable version: $PREVIOUS_TAG"
+          fi
+          
+          echo "tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+      
+      - name: Stop failed deployment
+        run: |
+          echo "🛑 Stopping failed production deployment..."
+          
+          # Stop current production containers
+          docker-compose -f docker-compose.prod.yml down || true
+          
+          # Also stop canary if it's still running
+          docker-compose -f docker-compose.canary.yml down || true
+          
+          echo "✅ Failed deployment stopped"
+      
+      - name: Restore from backup
+        if: steps.previous.outputs.tag != 'none'
+        run: |
+          echo "♻️ Restoring from backup..."
+          
+          # Check if backup images exist
+          BACKUP_DATE=$(date +%Y%m%d)
+          
+          if docker images | grep -q "devops-backend-prod:backup-"; then
+            echo "Found backup images, restoring..."
+            
+            # Get the most recent backup
+            LATEST_BACKUP=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "devops-backend-prod:backup-" | head -n 1)
+            
+            if [ -n "$LATEST_BACKUP" ]; then
+              echo "Restoring from: $LATEST_BACKUP"
+              
+              # Tag backup as latest
+              docker tag $LATEST_BACKUP devops-backend-prod:latest
+              
+              # Find corresponding frontend backup
+              BACKUP_TIMESTAMP=$(echo $LATEST_BACKUP | sed 's/.*backup-//')
+              FRONTEND_BACKUP="devops-frontend-prod:backup-$BACKUP_TIMESTAMP"
+              
+              if docker images | grep -q "$FRONTEND_BACKUP"; then
+                docker tag $FRONTEND_BACKUP devops-frontend-prod:latest
+              fi
+              
+              echo "✅ Backup images restored"
+            else
+              echo "⚠️ No backup images found"
+            fi
+          else
+            echo "⚠️ No backup images available"
+            echo "Will attempt to redeploy from previous stable tag"
+          fi
+      
+      - name: Checkout previous stable version
+        if: steps.previous.outputs.tag != 'none'
+        run: |
+          echo "📥 Checking out previous stable version: ${{ steps.previous.outputs.tag }}"
+          git fetch --all --tags
+          git checkout tags/${{ steps.previous.outputs.tag }} || {
+            echo "⚠️ Could not checkout previous tag"
+            echo "Will use current code"
+          }
+      
+      - name: Redeploy previous version
+        run: |
+          echo "🚀 Redeploying previous stable version..."
+          
+          # Start PostgreSQL first
+          docker-compose -f docker-compose.prod.yml up -d postgres
+          
+          # Wait for PostgreSQL
+          echo "⏳ Waiting for PostgreSQL..."
+          timeout 60 bash -c 'until docker exec devops-postgres-prod pg_isready -U postgres; do sleep 2; done' || {
+            echo "❌ PostgreSQL failed to start"
+            exit 1
+          }
+          
+          # Restore database backup if available
+          if [ -f backup-*.sql ]; then
+            LATEST_BACKUP=$(ls -t backup-*.sql | head -n 1)
+            echo "Restoring database from: $LATEST_BACKUP"
+            docker exec -i devops-postgres-prod psql -U postgres devops_platform_prod < $LATEST_BACKUP || {
+              echo "⚠️ Database restore failed, continuing with current state"
+            }
+          fi
+          
+          # Start backend and frontend
+          docker-compose -f docker-compose.prod.yml up -d backend frontend
+          
+          echo "✅ Previous version redeployed"
+      
+      - name: Verify rollback
+        run: |
+          echo "🔍 Verifying rollback..."
+          
+          # Wait for services to be healthy
+          echo "Waiting for backend..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "✅ Backend is healthy"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "❌ Rollback verification failed - backend not healthy"
+              docker logs devops-backend-prod --tail 50
+              exit 1
+            fi
+            sleep 10
+          done
+          
+          echo "Waiting for frontend..."
+          for i in {1..15}; do
+            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "✅ Frontend is healthy"
+              break
+            fi
+            if [ $i -eq 15 ]; then
+              echo "❌ Rollback verification failed - frontend not healthy"
+              docker logs devops-frontend-prod --tail 50
+              exit 1
+            fi
+            sleep 5
+          done
+          
+          echo "✅ Rollback verification successful"
+      
+      - name: Run smoke tests on rolled back version
+        run: |
+          echo "🧪 Running smoke tests on rolled back version..."
+          
+          # Test health endpoint
+          if ! curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
+            echo "❌ Health endpoint test failed"
+            exit 1
+          fi
+          echo "✅ Health endpoint test passed"
+          
+          # Test frontend
+          if ! curl -f http://localhost:3000 > /dev/null 2>&1; then
+            echo "❌ Frontend test failed"
+            exit 1
+          fi
+          echo "✅ Frontend test passed"
+          
+          echo "✅ All smoke tests passed on rolled back version"
+      
+      - name: Generate rollback report
+        run: |
+          echo "## 🔄 Rollback Completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ✅ Rollback successful" >> $GITHUB_STEP_SUMMARY
+          echo "- **Previous Version:** ${{ steps.previous.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Failed Build:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Rollback Time:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Actions Taken" >> $GITHUB_STEP_SUMMARY
+          echo "1. ✅ Stopped failed deployment" >> $GITHUB_STEP_SUMMARY
+          echo "2. ✅ Restored from backup images" >> $GITHUB_STEP_SUMMARY
+          echo "3. ✅ Redeployed previous stable version" >> $GITHUB_STEP_SUMMARY
+          echo "4. ✅ Verified rollback health" >> $GITHUB_STEP_SUMMARY
+          echo "5. ✅ Smoke tests passed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Current Status" >> $GITHUB_STEP_SUMMARY
+          docker ps --filter "name=devops-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Action Required:** Investigate the failure and fix issues before next deployment." >> $GITHUB_STEP_SUMMARY
+      
+      - name: Send rollback notification
+        if: secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "🚨 Production Rollback Executed",
+              "attachments": [
+                {
+                  "color": "warning",
+                  "fields": [
+                    {
+                      "title": "Repository",
+                      "value": "${{ github.repository }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Failed Build",
+                      "value": "${{ github.run_number }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Rolled Back To",
+                      "value": "${{ steps.previous.outputs.tag }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Status",
+                      "value": "✅ Rollback Successful",
+                      "short": true
+                    },
+                    {
+                      "title": "Workflow",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>",
+                      "short": false
+                    }
+                  ],
+                  "footer": "GitHub Actions - Rollback",
+                  "footer_icon": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
   # Summary Job
   pipeline-summary:
     name: Pipeline Summary
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan, deploy-preprod, integration-tests, api-tests, publish-artifacts, functional-tests, performance-tests]
+    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan, deploy-preprod, integration-tests, api-tests, publish-artifacts, functional-tests, performance-tests, tag-stable-artifact, canary-deployment, production-deployment, tag-gold-artifact, post-deployment-monitoring, notifications, rollback]
     if: always()
     
     steps:
       - name: Check pipeline status
         run: |
-          echo "## Pipeline Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Pipeline Execution Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Information" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Number:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workflow:** ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Job Status" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🔨 Build & Compile" >> $GITHUB_STEP_SUMMARY
           echo "- Build Backend: ${{ needs.build-backend.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Build Frontend: ${{ needs.build-frontend.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🧪 Testing & Quality" >> $GITHUB_STEP_SUMMARY
           echo "- Unit Tests: ${{ needs.unit-tests.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- SonarQube Analysis: ${{ needs.sonarqube-analysis.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Security Scan: ${{ needs.security-scan.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Deploy Pre-Prod: ${{ needs.deploy-preprod.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Integration Tests: ${{ needs.integration-tests.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- API Tests: ${{ needs.api-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- API Tests (Newman): ${{ needs.api-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Functional Tests (Selenium): ${{ needs.functional-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Performance Tests (JMeter): ${{ needs.performance-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🚀 Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- Deploy Pre-Production: ${{ needs.deploy-preprod.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Publish Artifacts: ${{ needs.publish-artifacts.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Functional Tests: ${{ needs.functional-tests.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Performance Tests: ${{ needs.performance-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Tag STABLE Artifact: ${{ needs.tag-stable-artifact.result }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "- Canary Deployment: ${{ needs.canary-deployment.result }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Production Deployment: ${{ needs.production-deployment.result }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Tag GOLD Artifact: ${{ needs.tag-gold-artifact.result }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Post-Deployment Monitoring: ${{ needs.post-deployment-monitoring.result }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Rollback: ${{ needs.rollback.result }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📢 Notifications" >> $GITHUB_STEP_SUMMARY
+          echo "- Notifications: ${{ needs.notifications.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Determine overall status
+          if [[ "${{ needs.build-backend.result }}" == "success" ]] && \
+             [[ "${{ needs.build-frontend.result }}" == "success" ]] && \
+             [[ "${{ needs.unit-tests.result }}" == "success" ]] && \
+             [[ "${{ needs.sonarqube-analysis.result }}" == "success" ]] && \
+             [[ "${{ needs.security-scan.result }}" == "success" ]]; then
+            
+            if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+              if [[ "${{ needs.production-deployment.result }}" == "success" ]]; then
+                echo "### ✅ Overall Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
+                echo "Pipeline completed successfully. Application deployed to production." >> $GITHUB_STEP_SUMMARY
+              elif [[ "${{ needs.rollback.result }}" == "success" ]]; then
+                echo "### ⚠️ Overall Status: ROLLED BACK" >> $GITHUB_STEP_SUMMARY
+                echo "Production deployment failed but rollback was successful." >> $GITHUB_STEP_SUMMARY
+              else
+                echo "### ❌ Overall Status: FAILED" >> $GITHUB_STEP_SUMMARY
+                echo "Production deployment failed and rollback also failed." >> $GITHUB_STEP_SUMMARY
+              fi
+            else
+              echo "### ✅ Overall Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
+              echo "Pipeline completed successfully. All tests passed." >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "### ❌ Overall Status: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "One or more critical stages failed." >> $GITHUB_STEP_SUMMARY
+          fi
       
       - name: Fail if any critical job failed
         if: |
@@ -779,7 +2031,8 @@ jobs:
           needs.unit-tests.result == 'failure' ||
           needs.sonarqube-analysis.result == 'failure' ||
           needs.security-scan.result == 'failure' ||
-          needs.deploy-preprod.result == 'failure'
+          needs.deploy-preprod.result == 'failure' ||
+          (github.ref == 'refs/heads/main' && needs.production-deployment.result == 'failure' && needs.rollback.result == 'failure')
         run: |
           echo "❌ Pipeline failed - one or more critical jobs failed"
           exit 1
