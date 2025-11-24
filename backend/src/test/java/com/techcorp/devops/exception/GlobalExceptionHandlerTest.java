@@ -153,4 +153,99 @@ class GlobalExceptionHandlerTest {
         assertTrue(response.getBody().getErrors().isEmpty());
         assertNotNull(response.getBody().getTimestamp());
     }
+    
+    @Test
+    void handleBadCredentials_ShouldReturnUnauthorizedResponse() {
+        // Arrange
+        org.springframework.security.authentication.BadCredentialsException exception = 
+            new org.springframework.security.authentication.BadCredentialsException("Bad credentials");
+        
+        // Act
+        ResponseEntity<GlobalExceptionHandler.ErrorResponse> response = 
+            handler.handleBadCredentials(exception);
+        
+        // Assert
+        assertNotNull(response);
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("UNAUTHORIZED", response.getBody().getCode());
+        assertEquals("Invalid username or password", response.getBody().getMessage());
+        assertTrue(response.getBody().getErrors().isEmpty());
+    }
+    
+    @Test
+    void handleSpringAuthenticationException_ShouldReturnUnauthorizedResponse() {
+        // Arrange
+        org.springframework.security.core.AuthenticationException exception = 
+            new org.springframework.security.authentication.InsufficientAuthenticationException("Not authenticated");
+        
+        // Act
+        ResponseEntity<GlobalExceptionHandler.ErrorResponse> response = 
+            handler.handleSpringAuthenticationException(exception);
+        
+        // Assert
+        assertNotNull(response);
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("UNAUTHORIZED", response.getBody().getCode());
+        assertEquals("Authentication failed", response.getBody().getMessage());
+        assertTrue(response.getBody().getErrors().isEmpty());
+    }
+    
+    @Test
+    void handleHttpMessageNotReadable_WithEnumError_ShouldReturnValidationError() {
+        // Arrange
+        org.springframework.http.converter.HttpMessageNotReadableException exception = 
+            mock(org.springframework.http.converter.HttpMessageNotReadableException.class);
+        when(exception.getMessage()).thenReturn("Cannot deserialize value of type Department");
+        
+        // Act
+        ResponseEntity<GlobalExceptionHandler.ErrorResponse> response = 
+            handler.handleHttpMessageNotReadable(exception);
+        
+        // Assert
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("VALIDATION_ERROR", response.getBody().getCode());
+        assertEquals("Invalid enum value in request", response.getBody().getMessage());
+    }
+    
+    @Test
+    void handleHttpMessageNotReadable_WithOtherError_ShouldReturnGenericValidationError() {
+        // Arrange
+        org.springframework.http.converter.HttpMessageNotReadableException exception = 
+            mock(org.springframework.http.converter.HttpMessageNotReadableException.class);
+        when(exception.getMessage()).thenReturn("Malformed JSON");
+        
+        // Act
+        ResponseEntity<GlobalExceptionHandler.ErrorResponse> response = 
+            handler.handleHttpMessageNotReadable(exception);
+        
+        // Assert
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("VALIDATION_ERROR", response.getBody().getCode());
+        assertEquals("Invalid request data", response.getBody().getMessage());
+    }
+    
+    @Test
+    void handleHttpMessageNotReadable_WithNullMessage_ShouldReturnGenericValidationError() {
+        // Arrange
+        org.springframework.http.converter.HttpMessageNotReadableException exception = 
+            mock(org.springframework.http.converter.HttpMessageNotReadableException.class);
+        when(exception.getMessage()).thenReturn(null);
+        
+        // Act
+        ResponseEntity<GlobalExceptionHandler.ErrorResponse> response = 
+            handler.handleHttpMessageNotReadable(exception);
+        
+        // Assert
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("VALIDATION_ERROR", response.getBody().getCode());
+        assertEquals("Invalid request data", response.getBody().getMessage());
+    }
 }

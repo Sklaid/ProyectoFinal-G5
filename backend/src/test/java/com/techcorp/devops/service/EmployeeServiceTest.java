@@ -248,4 +248,137 @@ class EmployeeServiceTest {
         verify(employeeRepository).existsById(1L);
         verify(employeeRepository, never()).deleteById(1L);
     }
+    
+    @Test
+    void createEmployee_WithNullSkills_ShouldCreateWithEmptySet() {
+        // Arrange
+        validCreateDTO.setSkills(null);
+        when(employeeRepository.existsByEmail(validCreateDTO.getEmail())).thenReturn(false);
+        when(employeeRepository.save(any(Employee.class))).thenReturn(validEmployee);
+        
+        // Act
+        EmployeeDTO result = employeeService.createEmployee(validCreateDTO);
+        
+        // Assert
+        assertNotNull(result);
+        verify(employeeRepository).save(any(Employee.class));
+    }
+    
+    @Test
+    void createEmployee_WithNullEmail_ShouldThrowValidationException() {
+        // Arrange
+        validCreateDTO.setEmail(null);
+        
+        // Act & Assert
+        assertThrows(ValidationException.class, () -> {
+            employeeService.createEmployee(validCreateDTO);
+        });
+        verify(employeeRepository, never()).save(any(Employee.class));
+    }
+    
+    @Test
+    void updateEmployee_WithSameEmail_ShouldNotCheckDuplicate() {
+        // Arrange
+        EmployeeUpdateDTO updateDTO = EmployeeUpdateDTO.builder()
+                .firstName("John Updated")
+                .lastName("Doe Updated")
+                .email("john.doe@example.com") // Same email
+                .phone("+1234567890")
+                .gender(Gender.MALE)
+                .department(Department.IT)
+                .level(Level.SENIOR)
+                .skills(new HashSet<>())
+                .hireDate(LocalDate.now())
+                .build();
+        
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(validEmployee));
+        when(employeeRepository.save(any(Employee.class))).thenReturn(validEmployee);
+        
+        // Act
+        EmployeeDTO result = employeeService.updateEmployee(1L, updateDTO);
+        
+        // Assert
+        assertNotNull(result);
+        verify(employeeRepository).findById(1L);
+        verify(employeeRepository, never()).existsByEmail(any());
+        verify(employeeRepository).save(any(Employee.class));
+    }
+    
+    @Test
+    void updateEmployee_WithDifferentEmailThatExists_ShouldThrowValidationException() {
+        // Arrange
+        EmployeeUpdateDTO updateDTO = EmployeeUpdateDTO.builder()
+                .firstName("John")
+                .lastName("Doe")
+                .email("different@example.com")
+                .phone("+1234567890")
+                .gender(Gender.MALE)
+                .department(Department.IT)
+                .level(Level.SENIOR)
+                .skills(new HashSet<>())
+                .hireDate(LocalDate.now())
+                .build();
+        
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(validEmployee));
+        when(employeeRepository.existsByEmail("different@example.com")).thenReturn(true);
+        
+        // Act & Assert
+        assertThrows(ValidationException.class, () -> {
+            employeeService.updateEmployee(1L, updateDTO);
+        });
+        verify(employeeRepository).findById(1L);
+        verify(employeeRepository).existsByEmail("different@example.com");
+        verify(employeeRepository, never()).save(any(Employee.class));
+    }
+    
+    @Test
+    void updateEmployee_WithInvalidEmail_ShouldThrowValidationException() {
+        // Arrange
+        EmployeeUpdateDTO updateDTO = EmployeeUpdateDTO.builder()
+                .firstName("John")
+                .lastName("Doe")
+                .email("invalid-email")
+                .phone("+1234567890")
+                .gender(Gender.MALE)
+                .department(Department.IT)
+                .level(Level.SENIOR)
+                .skills(new HashSet<>())
+                .hireDate(LocalDate.now())
+                .build();
+        
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(validEmployee));
+        
+        // Act & Assert
+        assertThrows(ValidationException.class, () -> {
+            employeeService.updateEmployee(1L, updateDTO);
+        });
+        verify(employeeRepository).findById(1L);
+        verify(employeeRepository, never()).save(any(Employee.class));
+    }
+    
+    @Test
+    void updateEmployee_WithNullSkills_ShouldUpdateWithEmptySet() {
+        // Arrange
+        EmployeeUpdateDTO updateDTO = EmployeeUpdateDTO.builder()
+                .firstName("John")
+                .lastName("Doe")
+                .email("john.doe@example.com")
+                .phone("+1234567890")
+                .gender(Gender.MALE)
+                .department(Department.IT)
+                .level(Level.SENIOR)
+                .skills(null)
+                .hireDate(LocalDate.now())
+                .build();
+        
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(validEmployee));
+        when(employeeRepository.save(any(Employee.class))).thenReturn(validEmployee);
+        
+        // Act
+        EmployeeDTO result = employeeService.updateEmployee(1L, updateDTO);
+        
+        // Assert
+        assertNotNull(result);
+        verify(employeeRepository).save(any(Employee.class));
+    }
 }

@@ -6,6 +6,7 @@
 2. SonarQube container running (via docker-compose.dev.yml)
 3. Maven installed for backend analysis
 4. Node.js and npm installed for frontend analysis
+5. SonarScanner CLI (for multi-module analysis)
 
 ## Initial SonarQube Setup
 
@@ -43,11 +44,37 @@ SonarQube comes with a default "Sonar way" quality gate. For this project, we wa
 
 ## Running SonarQube Analysis
 
-### Backend Analysis
+### Option 1: Multi-Module Analysis (Recommended) 🎯
+
+Analyze backend + frontend together (same as SonarCloud):
 
 ```bash
-# Navigate to backend directory
-cd backend
+# From project root
+scripts\sonar-local-analysis.bat
+```
+
+This will:
+- ✅ Build backend
+- ✅ Run tests and generate coverage
+- ✅ Analyze both backend and frontend
+- ✅ Create a single project with 2 modules
+- ✅ View at: http://localhost:9000/dashboard?id=devops-enterprise-platform
+
+**Advantages:**
+- Same structure as SonarCloud
+- Single project view
+- Combined metrics
+- Easier to manage
+
+### Option 2: Separate Analysis (Legacy) 🔧
+
+Analyze backend and frontend separately:
+
+#### Backend Only
+
+```bash
+# From project root
+scripts\sonar-backend-only.bat
 
 # Run Maven with SonarQube analysis (Windows PowerShell)
 mvn sonar:sonar "-Dsonar.projectKey=devops-enterprise-platform" "-Dsonar.host.url=http://localhost:9000" "-Dsonar.token=squ_9ee713d1bb15f9eba7c740a2b665d8b8db590502"
@@ -154,3 +181,119 @@ For GitHub Actions pipeline, you'll need to:
 - Subsequent analyses are incremental and faster
 - Quality gate checks only "New Code" by default
 - You can configure quality gates to check "Overall Code" if needed
+
+
+# Or manually:
+cd backend
+mvn clean verify sonar:sonar \
+  -Dsonar.projectKey=devops-enterprise-platform-backend \
+  -Dsonar.projectName="DevOps Platform - Backend" \
+  -Dsonar.host.url=http://localhost:9000 \
+  -Dsonar.token=squ_9ee713d1bb15f9eba7c740a2b665d8b8db590502
+```
+
+View at: http://localhost:9000/dashboard?id=devops-enterprise-platform-backend
+
+#### Frontend Only
+
+```bash
+# From project root
+scripts\sonar-frontend-only.bat
+
+# Or manually:
+cd frontend
+npm ci
+npm run test:coverage
+npx sonar-scanner \
+  -Dsonar.projectKey=devops-enterprise-platform-frontend \
+  -Dsonar.projectName="DevOps Platform - Frontend" \
+  -Dsonar.sources=src \
+  -Dsonar.tests=src \
+  -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx \
+  -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/coverage/** \
+  -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+  -Dsonar.host.url=http://localhost:9000 \
+  -Dsonar.token=squ_9ee713d1bb15f9eba7c740a2b665d8b8db590502
+```
+
+View at: http://localhost:9000/dashboard?id=devops-enterprise-platform-frontend
+
+**Disadvantages:**
+- Two separate projects
+- Harder to see combined metrics
+- Different from SonarCloud structure
+
+## Comparison: Local vs Cloud
+
+| Aspect | SonarQube Local | SonarCloud |
+|--------|----------------|------------|
+| **Location** | http://localhost:9000 | https://sonarcloud.io |
+| **Trigger** | Manual (run script) | Automatic (on push) |
+| **Speed** | ⚡ Fast (30 sec) | 🐢 Slower (5-10 min) |
+| **Purpose** | Development/Testing | CI/CD Validation |
+| **Configuration** | Same as cloud | Same as local |
+| **When to use** | Before commit | After push |
+
+## Recommended Workflow
+
+```bash
+# 1. During development
+# Write code → Run local analysis
+scripts\sonar-local-analysis.bat
+
+# 2. Review results
+# Open http://localhost:9000
+# Fix any code smells or issues
+
+# 3. When ready
+git add .
+git commit -m "Feature: Added new functionality"
+git push
+
+# 4. Automatic CI/CD
+# GitHub Actions → SonarCloud analysis
+# Quality Gate check
+```
+
+## Troubleshooting
+
+### SonarQube not running
+
+```bash
+# Start development environment
+scripts\start-dev.bat
+
+# Wait for SonarQube to be healthy
+# Check at: http://localhost:9000
+```
+
+### SonarScanner not found
+
+For multi-module analysis, you need SonarScanner CLI:
+
+**Windows:**
+1. Download from: https://docs.sonarqube.org/latest/analysis/scan/sonarscanner/
+2. Extract to `C:\sonar-scanner`
+3. Add to PATH: `C:\sonar-scanner\bin`
+
+**Or use separate analysis** (Option 2) which doesn't require SonarScanner CLI.
+
+### Coverage not showing
+
+Make sure to run tests before analysis:
+
+```bash
+# Backend
+cd backend
+mvn test jacoco:report
+
+# Frontend
+cd frontend
+npm run test:coverage
+```
+
+## Additional Resources
+
+- SonarQube Documentation: https://docs.sonarqube.org/
+- SonarCloud Documentation: https://docs.sonarcloud.io/
+- Quality Gates: https://docs.sonarqube.org/latest/user-guide/quality-gates/
