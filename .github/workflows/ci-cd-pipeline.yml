@@ -226,27 +226,104 @@ jobs:
             -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
         working-directory: ./backend
       
-      - name: Check SonarQube Quality Gate
+      - name: Set up Node.js for frontend analysis
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: ./frontend
+      
+      - name: Download frontend coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+      
+      - name: Verify frontend coverage report
+        run: |
+          echo "Verifying frontend coverage report..."
+          if [ -f "coverage/lcov.info" ]; then
+            echo "✅ Frontend coverage report found"
+            ls -lh coverage/
+          else
+            echo "❌ Frontend coverage report not found"
+            ls -R coverage/ || echo "Coverage directory not found"
+            exit 1
+          fi
+        working-directory: ./frontend
+      
+      - name: Install SonarScanner
+        run: npm install -g sonarqube-scanner
+      
+      - name: Run SonarQube analysis for frontend
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=Sklaid_ProyectoFinal-G5-frontend \
+            -Dsonar.organization=sklaid \
+            -Dsonar.sources=src \
+            -Dsonar.tests=src \
+            -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx \
+            -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/build/**,**/coverage/**,**/*.config.ts,**/*.config.js,**/vite-env.d.ts \
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+            -Dsonar.typescript.lcov.reportPaths=coverage/lcov.info \
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+        working-directory: ./frontend
+      
+      - name: Check SonarQube Quality Gates
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
           # Wait for analysis to complete
-          sleep 10
+          echo "⏳ Waiting for SonarCloud analysis to complete..."
+          sleep 15
           
-          # Check quality gate status
-          status=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: \
+          # Check backend quality gate status
+          echo "Checking Backend Quality Gate..."
+          backend_status=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: \
             "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=Sklaid_ProyectoFinal-G5" \
             | jq -r '.projectStatus.status')
           
-          echo "Quality Gate Status: $status"
+          echo "Backend Quality Gate Status: $backend_status"
           
-          if [ "$status" != "OK" ]; then
-            echo "❌ Quality Gate failed!"
+          # Check frontend quality gate status
+          echo "Checking Frontend Quality Gate..."
+          frontend_status=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: \
+            "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=Sklaid_ProyectoFinal-G5-frontend" \
+            | jq -r '.projectStatus.status')
+          
+          echo "Frontend Quality Gate Status: $frontend_status"
+          
+          # Summary
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## SonarCloud Quality Gates" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Project | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | $backend_status |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | $frontend_status |" >> $GITHUB_STEP_SUMMARY
+          
+          # Check if both passed
+          if [ "$backend_status" != "OK" ] || [ "$frontend_status" != "OK" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "❌ One or more Quality Gates failed!" >> $GITHUB_STEP_SUMMARY
+            echo ""
+            echo "❌ Quality Gate check failed!"
             exit 1
           fi
           
-          echo "✅ Quality Gate passed!"
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All Quality Gates passed!" >> $GITHUB_STEP_SUMMARY
+          echo ""
+          echo "✅ All Quality Gates passed!"
 
   # Job 5: Security Scan
   security-scan:
