@@ -23,7 +23,7 @@ export const EmployeeFormPage: React.FC = () => {
 
   useEffect(() => {
     if (isEditMode && id) {
-      fetchEmployee(parseInt(id, 10));
+      fetchEmployee(Number.parseInt(id, 10));
     }
   }, [id, isEditMode]);
 
@@ -59,7 +59,7 @@ export const EmployeeFormPage: React.FC = () => {
       setError(null);
 
       if (isEditMode && id) {
-        await employeeService.update(parseInt(id, 10), data);
+        await employeeService.update(Number.parseInt(id, 10), data);
       } else {
         await employeeService.create(data);
       }

@@ -111,6 +111,19 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
     }
   });
 
+  // Extract skill change handler to reduce nesting
+  const handleSkillChange = (
+    currentSkills: string[] | undefined,
+    skill: string,
+    checked: boolean,
+    onChange: (value: string[]) => void
+  ) => {
+    const newSkills = checked
+      ? [...(currentSkills || []), skill]
+      : (currentSkills || []).filter((s) => s !== skill);
+    onChange(newSkills);
+  };
+
   return (
     <Paper sx={{ p: 3 }}>
       <form onSubmit={handleSubmit(onSubmit)}>
@@ -279,12 +292,12 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
                         control={
                           <Checkbox
                             checked={field.value?.includes(skill) || false}
-                            onChange={(e) => {
-                              const newSkills = e.target.checked
-                                ? [...(field.value || []), skill]
-                                : (field.value || []).filter((s) => s !== skill);
-                              field.onChange(newSkills);
-                            }}
+                            onChange={(e) => handleSkillChange(
+                              field.value,
+                              skill,
+                              e.target.checked,
+                              field.onChange
+                            )}
                           />
                         }
                         label={skill}

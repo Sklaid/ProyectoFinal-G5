@@ -20,9 +20,9 @@ export const Navbar: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     try {
-      await logout();
+      logout();
       navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 import { Snackbar, Alert, AlertColor } from '@mui/material';
 
 interface ToastContextType {
@@ -47,8 +47,10 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     setToast(prev => ({ ...prev, open: false }));
   };
 
+  const value = useMemo(() => ({ showToast }), [showToast]);
+
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={value}>
       {children}
       <Snackbar
         open={toast.open}

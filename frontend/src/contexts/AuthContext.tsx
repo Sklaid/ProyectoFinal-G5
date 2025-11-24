@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { User, AuthContextType } from '../types/auth';
 import { authService } from '../services/authService';
 
@@ -60,14 +60,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const value: AuthContextType = {
+  const value: AuthContextType = useMemo(() => ({
     user,
     token,
     isAuthenticated: !!token && !!user,
     login,
     logout,
     isLoading,
-  };
+  }), [user, token, isLoading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
