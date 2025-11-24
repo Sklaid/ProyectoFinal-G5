@@ -4,7 +4,10 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -59,8 +62,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
     
-    @ExceptionHandler(AuthenticationException.class)
-    public ResponseEntity<ErrorResponse> handleAuthenticationException(AuthenticationException ex) {
+    @ExceptionHandler(com.techcorp.devops.exception.AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthenticationException(com.techcorp.devops.exception.AuthenticationException ex) {
         ErrorResponse error = new ErrorResponse(
                 "UNAUTHORIZED",
                 ex.getMessage(),
@@ -68,6 +71,49 @@ public class GlobalExceptionHandler {
                 LocalDateTime.now()
         );
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+    }
+    
+    // Handle Spring Security BadCredentialsException (Bug #1 fix)
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex) {
+        ErrorResponse error = new ErrorResponse(
+                "UNAUTHORIZED",
+                "Invalid username or password",
+                new ArrayList<>(),
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+    }
+    
+    // Handle Spring Security AuthenticationException (Bug #1 fix)
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleSpringAuthenticationException(AuthenticationException ex) {
+        ErrorResponse error = new ErrorResponse(
+                "UNAUTHORIZED",
+                "Authentication failed",
+                new ArrayList<>(),
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+    }
+    
+    // Handle invalid enum values and malformed JSON (Bug #2 fix)
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
+        String message = "Invalid request data";
+        
+        // Check if it's an enum conversion error
+        if (ex.getMessage() != null && ex.getMessage().contains("Cannot deserialize value")) {
+            message = "Invalid enum value in request";
+        }
+        
+        ErrorResponse error = new ErrorResponse(
+                "VALIDATION_ERROR",
+                message,
+                new ArrayList<>(),
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
     
     @ExceptionHandler(AccessDeniedException.class)
