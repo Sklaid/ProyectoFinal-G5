@@ -255,8 +255,8 @@ jobs:
           backend.sonar.projectName=Backend (Java)
           backend.sonar.projectBaseDir=backend
           
-          # Source directories (simplified like Maven does)
-          backend.sonar.sources=src,pom.xml
+          # Source directories (separate production code from tests)
+          backend.sonar.sources=src/main,pom.xml
           backend.sonar.tests=src/test
           
           # Java-specific settings
@@ -271,7 +271,6 @@ jobs:
           # Backend exclusions
           backend.sonar.exclusions=**/dto/**,**/entity/**,**/config/**,**/DevOpsPlatformApplication.java,**/target/**
           backend.sonar.coverage.exclusions=**/dto/**,**/entity/**,**/config/**,**/DevOpsPlatformApplication.java
-          backend.sonar.test.exclusions=**/test/**
           
           # ============================================
           # Frontend Module (TypeScript/React)
