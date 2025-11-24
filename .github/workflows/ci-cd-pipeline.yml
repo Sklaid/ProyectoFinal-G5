@@ -658,18 +658,23 @@ jobs:
           npm install -g newman
           npm install -g newman-reporter-htmlextra
       
-      - name: Run Auth API tests
+      - name: Create reports directory
+        run: mkdir -p reports
+      
+      - name: Run Auth API tests (includes login to get token)
         run: |
           echo "🧪 Running authentication API tests..."
+          echo "Note: Auth tests will login first to get a valid token"
           newman run postman/auth.postman_collection.json \
             -e postman/dev.env.json \
             --reporters cli,htmlextra,junit \
             --reporter-htmlextra-export reports/auth-report.html \
             --reporter-junit-export reports/auth-junit.xml \
-            --bail
+            --bail \
+            --insecure
         continue-on-error: true
       
-      - name: Run Employees API tests
+      - name: Run Employees API tests (uses token from auth tests)
         run: |
           echo "🧪 Running employees API tests..."
           newman run postman/employees.postman_collection.json \
@@ -677,7 +682,8 @@ jobs:
             --reporters cli,htmlextra,junit \
             --reporter-htmlextra-export reports/employees-report.html \
             --reporter-junit-export reports/employees-junit.xml \
-            --bail
+            --bail \
+            --insecure
         continue-on-error: true
       
       - name: Stop services
@@ -867,9 +873,11 @@ jobs:
       - name: Run Selenium tests
         run: |
           echo "🧪 Running Selenium functional tests..."
-          mvn test -Dtest=**/*E2ETest \
+          echo "Running all tests in e2e.tests package..."
+          mvn test \
             -Dselenium.baseUrl=http://localhost:3000 \
-            -Dselenium.headless=true
+            -Dselenium.headless=true \
+            -Dtest=com.techcorp.devops.e2e.tests.*
         working-directory: ./e2e-tests
         continue-on-error: true
       
@@ -951,6 +959,12 @@ jobs:
           tar -xzf apache-jmeter-5.6.3.tgz
           echo "JMETER_HOME=$(pwd)/apache-jmeter-5.6.3" >> $GITHUB_ENV
           echo "$(pwd)/apache-jmeter-5.6.3/bin" >> $GITHUB_PATH
+      
+      - name: Create JMeter output directories
+        run: |
+          mkdir -p jmeter-tests/results
+          mkdir -p jmeter-tests/reports/auth-report-ci
+          mkdir -p jmeter-tests/reports/employee-report-ci
       
       - name: Run JMeter auth tests
         run: |
