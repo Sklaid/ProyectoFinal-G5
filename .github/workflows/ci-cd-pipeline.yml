@@ -559,7 +559,7 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: [deploy-preprod]
+    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan]
     if: ${{ !inputs.skip_tests }}
     
     services:
@@ -609,12 +609,44 @@ jobs:
   api-tests:
     name: API Tests (Newman)
     runs-on: ubuntu-latest
-    needs: [deploy-preprod]
+    needs: [build-backend, build-frontend]
     if: ${{ !inputs.skip_tests }}
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Start services with Docker Compose
+        run: |
+          echo "🚀 Starting services for API tests..."
+          docker compose -f docker-compose.dev.yml up -d postgres backend
+          
+          echo "⏳ Waiting for PostgreSQL..."
+          timeout 60 bash -c 'until docker exec devops-postgres pg_isready -U postgres; do sleep 2; done'
+          
+          echo "⏳ Waiting for backend to be healthy..."
+          for i in {1..60}; do
+            if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "✅ Backend is ready"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "❌ Backend not ready after 10 minutes"
+              docker logs devops-backend
+              exit 1
+            fi
+            echo "Attempt $i/60: Backend not ready yet..."
+            sleep 10
+          done
       
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -625,21 +657,6 @@ jobs:
         run: |
           npm install -g newman
           npm install -g newman-reporter-htmlextra
-      
-      - name: Wait for API to be ready
-        run: |
-          echo "⏳ Waiting for API to be ready..."
-          for i in {1..30}; do
-            if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
-              echo "✅ API is ready"
-              break
-            fi
-            if [ $i -eq 30 ]; then
-              echo "❌ API not ready after 5 minutes"
-              exit 1
-            fi
-            sleep 10
-          done
       
       - name: Run Auth API tests
         run: |
@@ -663,6 +680,12 @@ jobs:
             --bail
         continue-on-error: true
       
+      - name: Stop services
+        if: always()
+        run: |
+          echo "🛑 Stopping services..."
+          docker compose -f docker-compose.dev.yml down
+      
       - name: Upload Newman reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -682,9 +705,10 @@ jobs:
   publish-artifacts:
     name: Publish Artifacts to Nexus
     runs-on: ubuntu-latest
-    needs: [integration-tests, api-tests]
+    needs: [integration-tests, api-tests, functional-tests, performance-tests]
     if: |
-      success() &&
+      always() &&
+      needs.integration-tests.result == 'success' &&
       (github.ref == 'refs/heads/develop' || 
        github.ref == 'refs/heads/main' || 
        startsWith(github.ref, 'refs/heads/release/'))
@@ -762,12 +786,65 @@ jobs:
   functional-tests:
     name: Functional Tests (Selenium)
     runs-on: ubuntu-latest
-    needs: [deploy-preprod]
+    needs: [build-backend, build-frontend]
     if: ${{ !inputs.skip_tests }}
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/
+      
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Start services with Docker Compose
+        run: |
+          echo "🚀 Starting services for functional tests..."
+          docker compose -f docker-compose.dev.yml up -d postgres backend frontend
+          
+          echo "⏳ Waiting for PostgreSQL..."
+          timeout 60 bash -c 'until docker exec devops-postgres pg_isready -U postgres; do sleep 2; done'
+          
+          echo "⏳ Waiting for backend to be healthy..."
+          for i in {1..60}; do
+            if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "✅ Backend is ready"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "❌ Backend not ready"
+              docker logs devops-backend
+              exit 1
+            fi
+            echo "Attempt $i/60: Backend not ready yet..."
+            sleep 10
+          done
+          
+          echo "⏳ Waiting for frontend to be ready..."
+          for i in {1..30}; do
+            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "✅ Frontend is ready"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "❌ Frontend not ready"
+              docker logs devops-frontend
+              exit 1
+            fi
+            echo "Attempt $i/30: Frontend not ready yet..."
+            sleep 5
+          done
       
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -785,24 +862,7 @@ jobs:
         run: |
           CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d'.' -f1)
           echo "Chrome version: $CHROME_VERSION"
-          
-          # ChromeDriver is managed by WebDriverManager in the code
           echo "ChromeDriver will be managed by WebDriverManager"
-      
-      - name: Wait for application to be ready
-        run: |
-          echo "⏳ Waiting for application to be ready..."
-          for i in {1..30}; do
-            if curl -f http://localhost:3000 > /dev/null 2>&1; then
-              echo "✅ Application is ready"
-              break
-            fi
-            if [ $i -eq 30 ]; then
-              echo "❌ Application not ready"
-              exit 1
-            fi
-            sleep 10
-          done
       
       - name: Run Selenium tests
         run: |
@@ -812,6 +872,12 @@ jobs:
             -Dselenium.headless=true
         working-directory: ./e2e-tests
         continue-on-error: true
+      
+      - name: Stop services
+        if: always()
+        run: |
+          echo "🛑 Stopping services..."
+          docker compose -f docker-compose.dev.yml down
       
       - name: Upload screenshots
         if: always()
@@ -833,12 +899,44 @@ jobs:
   performance-tests:
     name: Performance Tests (JMeter)
     runs-on: ubuntu-latest
-    needs: [deploy-preprod]
+    needs: [build-backend]
     if: ${{ !inputs.skip_tests }}
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Start services with Docker Compose
+        run: |
+          echo "🚀 Starting services for performance tests..."
+          docker compose -f docker-compose.dev.yml up -d postgres backend
+          
+          echo "⏳ Waiting for PostgreSQL..."
+          timeout 60 bash -c 'until docker exec devops-postgres pg_isready -U postgres; do sleep 2; done'
+          
+          echo "⏳ Waiting for backend to be healthy..."
+          for i in {1..60}; do
+            if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "✅ Backend is ready"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "❌ Backend not ready"
+              docker logs devops-backend
+              exit 1
+            fi
+            echo "Attempt $i/60: Backend not ready yet..."
+            sleep 10
+          done
       
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -849,25 +947,10 @@ jobs:
       - name: Install JMeter
         run: |
           echo "📥 Installing Apache JMeter..."
-          wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.3.tgz
+          wget -q https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.3.tgz
           tar -xzf apache-jmeter-5.6.3.tgz
           echo "JMETER_HOME=$(pwd)/apache-jmeter-5.6.3" >> $GITHUB_ENV
           echo "$(pwd)/apache-jmeter-5.6.3/bin" >> $GITHUB_PATH
-      
-      - name: Wait for API to be ready
-        run: |
-          echo "⏳ Waiting for API to be ready..."
-          for i in {1..30}; do
-            if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
-              echo "✅ API is ready"
-              break
-            fi
-            if [ $i -eq 30 ]; then
-              echo "❌ API not ready"
-              exit 1
-            fi
-            sleep 10
-          done
       
       - name: Run JMeter auth tests
         run: |
@@ -894,6 +977,12 @@ jobs:
             jmeter-tests/results/auth-results-ci.jtl \
             jmeter-tests/results/employee-results-ci.jtl
         continue-on-error: true
+      
+      - name: Stop services
+        if: always()
+        run: |
+          echo "🛑 Stopping services..."
+          docker compose -f docker-compose.dev.yml down
       
       - name: Upload JMeter reports
         if: always()
