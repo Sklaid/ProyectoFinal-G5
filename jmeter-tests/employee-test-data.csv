@@ -1,0 +1,16 @@
+firstName,lastName,email,phone,gender,department,level,skills,hireDate
+John,Doe,john.doe1@example.com,555-0101,MALE,IT,SENIOR,"Java,Spring,Docker",2023-01-15
+Jane,Smith,jane.smith1@example.com,555-0102,FEMALE,HR,MID,"Recruitment,Training",2023-02-20
+Michael,Johnson,michael.johnson1@example.com,555-0103,MALE,FINANCE,LEAD,"Accounting,Analysis",2023-03-10
+Emily,Williams,emily.williams1@example.com,555-0104,FEMALE,SALES,JUNIOR,"CRM,Communication",2023-04-05
+David,Brown,david.brown1@example.com,555-0105,MALE,IT,MID,"Python,AWS,Kubernetes",2023-05-12
+Sarah,Davis,sarah.davis1@example.com,555-0106,FEMALE,IT,SENIOR,"React,TypeScript,CSS",2023-06-18
+Robert,Miller,robert.miller1@example.com,555-0107,MALE,HR,SENIOR,"Leadership,Strategy",2023-07-22
+Lisa,Wilson,lisa.wilson1@example.com,555-0108,FEMALE,FINANCE,MID,"Budgeting,Reporting",2023-08-30
+James,Moore,james.moore1@example.com,555-0109,MALE,SALES,LEAD,"Negotiation,Strategy",2023-09-14
+Jennifer,Taylor,jennifer.taylor1@example.com,555-0110,FEMALE,IT,JUNIOR,"HTML,CSS,JavaScript",2023-10-25
+William,Anderson,william.anderson1@example.com,555-0111,MALE,IT,MID,"DevOps,CI/CD,Jenkins",2023-11-08
+Mary,Thomas,mary.thomas1@example.com,555-0112,FEMALE,HR,JUNIOR,"Onboarding,Benefits",2023-12-01
+Charles,Jackson,charles.jackson1@example.com,555-0113,MALE,FINANCE,SENIOR,"Tax,Compliance",2024-01-10
+Patricia,White,patricia.white1@example.com,555-0114,FEMALE,SALES,MID,"B2B,Prospecting",2024-02-14
+Christopher,Harris,christopher.harris1@example.com,555-0115,MALE,IT,LEAD,"Architecture,Microservices",2024-03-20
