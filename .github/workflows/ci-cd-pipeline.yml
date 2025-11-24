@@ -185,7 +185,8 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
           mvn sonar:sonar \
-            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }} \
+            -Dsonar.projectKey=Sklaid_ProyectoFinal-G5 \
+            -Dsonar.organization=sklaid \
             -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
             -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
             -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
@@ -201,7 +202,7 @@ jobs:
           
           # Check quality gate status
           status=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: \
-            "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${{ env.SONAR_PROJECT_KEY }}" \
+            "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=Sklaid_ProyectoFinal-G5" \
             | jq -r '.projectStatus.status')
           
           echo "Quality Gate Status: $status"
