@@ -489,20 +489,20 @@ jobs:
           echo "🚀 Deploying to pre-production environment..."
           
           # Stop any existing containers
-          docker-compose -f docker-compose.dev.yml down || true
+          docker compose -f docker-compose.dev.yml down || true
           
           # Start services
-          docker-compose -f docker-compose.dev.yml up -d postgres
+          docker compose -f docker-compose.dev.yml up -d postgres
           
           # Wait for PostgreSQL to be ready
           echo "⏳ Waiting for PostgreSQL to be ready..."
           timeout 60 bash -c 'until docker exec devops-postgres pg_isready -U postgres; do sleep 2; done'
           
           # Start backend
-          docker-compose -f docker-compose.dev.yml up -d backend
+          docker compose -f docker-compose.dev.yml up -d backend
           
           # Start frontend
-          docker-compose -f docker-compose.dev.yml up -d frontend
+          docker compose -f docker-compose.dev.yml up -d frontend
           
           echo "✅ Services started"
       
