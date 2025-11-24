@@ -121,6 +121,20 @@ jobs:
         run: mvn test jacoco:report
         working-directory: ./backend
       
+      - name: Verify coverage report generated
+        if: ${{ !inputs.skip_tests }}
+        run: |
+          echo "Checking for JaCoCo coverage report..."
+          if [ -f "target/site/jacoco/jacoco.xml" ]; then
+            echo "✅ JaCoCo XML report found"
+            ls -lh target/site/jacoco/
+          else
+            echo "❌ JaCoCo XML report not found"
+            ls -R target/
+            exit 1
+          fi
+        working-directory: ./backend
+      
       - name: Upload backend coverage report
         if: ${{ !inputs.skip_tests }}
         uses: actions/upload-artifact@v4
@@ -173,14 +187,29 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
       
+      - name: Build backend for SonarQube
+        run: mvn clean compile -DskipTests
+        working-directory: ./backend
+      
       - name: Download backend coverage report
         uses: actions/download-artifact@v4
         with:
           name: backend-coverage
           path: backend/target/site/jacoco/
       
-      - name: Build backend for SonarQube
-        run: mvn clean compile -DskipTests
+      - name: Verify coverage report downloaded
+        run: |
+          echo "Verifying downloaded coverage report..."
+          if [ -f "target/site/jacoco/jacoco.xml" ]; then
+            echo "✅ JaCoCo XML report downloaded successfully"
+            ls -lh target/site/jacoco/
+            echo "File size:"
+            du -h target/site/jacoco/jacoco.xml
+          else
+            echo "❌ JaCoCo XML report not found after download"
+            ls -R target/
+            exit 1
+          fi
         working-directory: ./backend
       
       - name: Run SonarQube analysis
