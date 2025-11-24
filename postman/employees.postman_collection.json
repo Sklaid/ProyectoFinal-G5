@@ -424,7 +424,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"firstName\": \"John Updated\",\n    \"lastName\": \"Doe\",\n    \"email\": \"john.doe@techcorp.com\",\n    \"phone\": \"+9876543210\",\n    \"gender\": \"MALE\",\n    \"department\": \"IT\",\n    \"level\": \"LEAD\",\n    \"skills\": [\"Java\", \"Spring Boot\", \"Docker\", \"Kubernetes\"],\n    \"hireDate\": \"2024-01-15\"\n}"
+					"raw": "{\n    \"firstName\": \"John Updated\",\n    \"lastName\": \"Doe\",\n    \"email\": \"{{unique_email}}\",\n    \"phone\": \"+9876543210\",\n    \"gender\": \"MALE\",\n    \"department\": \"IT\",\n    \"level\": \"LEAD\",\n    \"skills\": [\"Java\", \"Spring Boot\", \"Docker\", \"Kubernetes\"],\n    \"hireDate\": \"2024-01-15\"\n}"
 				},
 				"url": {
 					"raw": "{{base_url}}/api/employees/{{employee_id}}",
