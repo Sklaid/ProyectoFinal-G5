@@ -179,6 +179,10 @@ jobs:
           name: backend-coverage
           path: backend/target/site/jacoco/
       
+      - name: Build backend for SonarQube
+        run: mvn clean compile -DskipTests
+        working-directory: ./backend
+      
       - name: Run SonarQube analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -189,6 +193,7 @@ jobs:
             -Dsonar.organization=sklaid \
             -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
             -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
+            -Dsonar.java.binaries=target/classes \
             -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
         working-directory: ./backend
       
