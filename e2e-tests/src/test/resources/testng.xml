@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="DevOps Platform E2E Test Suite" parallel="false">
+    <test name="Functional Tests">
+        <classes>
+            <class name="com.techcorp.devops.e2e.tests.LoginFlowTest"/>
+            <class name="com.techcorp.devops.e2e.tests.EmployeeCRUDTest"/>
+        </classes>
+    </test>
+</suite>
