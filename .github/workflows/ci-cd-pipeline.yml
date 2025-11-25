@@ -858,6 +858,16 @@ jobs:
         run: |
           echo "🔧 Setting up Nexus repositories..."
           
+          # Accept EULA (required for Nexus 3.86+)
+          echo "📜 Accepting Nexus EULA..."
+          curl -X POST "http://localhost:8081/service/rest/v1/system/eula/accept" \
+            -u "admin:admin123" \
+            -H "Content-Type: application/json" \
+            -d '{"accepted": true}' || echo "EULA already accepted or not required"
+          
+          echo "✅ EULA accepted"
+          echo ""
+          
           # Check if repositories already exist
           echo "📋 Checking existing repositories..."
           curl -s -u "admin:admin123" http://localhost:8081/service/rest/v1/repositories | jq -r '.[].name' || true
