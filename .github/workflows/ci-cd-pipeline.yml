@@ -730,6 +730,9 @@ jobs:
        github.ref == 'refs/heads/main' || 
        startsWith(github.ref, 'refs/heads/release/'))
     
+    permissions:
+      contents: write  # Required to push tags
+    
     services:
       nexus:
         image: sonatype/nexus3:latest
@@ -1391,6 +1394,9 @@ jobs:
       (github.ref == 'refs/heads/develop' || 
        startsWith(github.ref, 'refs/heads/release/'))
     
+    permissions:
+      contents: write  # Required to push tags
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -1924,6 +1930,9 @@ jobs:
     if: |
       success() &&
       github.ref == 'refs/heads/main'
+    
+    permissions:
+      contents: write  # Required to push tags
     
     steps:
       - name: Checkout code
