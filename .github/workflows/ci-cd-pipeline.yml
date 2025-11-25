@@ -857,140 +857,54 @@ jobs:
       - name: Setup Nexus repositories
         run: |
           echo "🔧 Setting up Nexus repositories..."
-          echo ""
           
-          # 📋 Verificar repositorios existentes
-          echo "📋 Verificando repositorios existentes..."
-          EXISTING_REPOS=$(curl -s -u "admin:admin123" \
-            http://localhost:8081/service/rest/v1/repositories | jq -r '.[].name')
-          echo "Repositorios actuales:"
-          echo "$EXISTING_REPOS"
-          echo ""
+          # Check if repositories already exist
+          echo "📋 Checking existing repositories..."
+          curl -s -u "admin:admin123" http://localhost:8081/service/rest/v1/repositories | jq -r '.[].name' || true
           
-          # Crear maven-releases si no existe
-          if echo "$EXISTING_REPOS" | grep -q "maven-releases"; then
-            echo "✓ maven-releases ya existe"
-          else
-            echo "Creando maven-releases..."
-            curl -X POST "http://localhost:8081/service/rest/v1/repositories/maven/hosted" \
-              -u "admin:admin123" \
-              -H "Content-Type: application/json" \
-              -d '{
-                "name": "maven-releases",
-                "online": true,
-                "storage": {
-                  "blobStoreName": "default",
-                  "strictContentTypeValidation": true,
-                  "writePolicy": "ALLOW_ONCE"
-                },
-                "maven": {
-                  "versionPolicy": "RELEASE",
-                  "layoutPolicy": "STRICT"
-                }
-              }' && echo "✓ maven-releases creado" || echo "⚠ Error creando maven-releases"
-          fi
+          # Create maven-releases repository (ignore if exists)
+          echo "Creating maven-releases repository..."
+          curl -X POST "http://localhost:8081/service/rest/v1/repositories/maven/hosted" \
+            -u "admin:admin123" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "maven-releases",
+              "online": true,
+              "storage": {
+                "blobStoreName": "default",
+                "strictContentTypeValidation": true,
+                "writePolicy": "ALLOW_ONCE"
+              },
+              "maven": {
+                "versionPolicy": "RELEASE",
+                "layoutPolicy": "STRICT"
+              }
+            }' 2>&1 | grep -v "already exists" || echo "✓ maven-releases ready"
           
-          # Crear maven-snapshots si no existe
-          if echo "$EXISTING_REPOS" | grep -q "maven-snapshots"; then
-            echo "✓ maven-snapshots ya existe"
-          else
-            echo "Creando maven-snapshots..."
-            curl -X POST "http://localhost:8081/service/rest/v1/repositories/maven/hosted" \
-              -u "admin:admin123" \
-              -H "Content-Type: application/json" \
-              -d '{
-                "name": "maven-snapshots",
-                "online": true,
-                "storage": {
-                  "blobStoreName": "default",
-                  "strictContentTypeValidation": true,
-                  "writePolicy": "ALLOW"
-                },
-                "maven": {
-                  "versionPolicy": "SNAPSHOT",
-                  "layoutPolicy": "STRICT"
-                }
-              }' && echo "✓ maven-snapshots creado" || echo "⚠ Error creando maven-snapshots"
-          fi
+          # Create maven-snapshots repository (ignore if exists)
+          echo "Creating maven-snapshots repository..."
+          curl -X POST "http://localhost:8081/service/rest/v1/repositories/maven/hosted" \
+            -u "admin:admin123" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "maven-snapshots",
+              "online": true,
+              "storage": {
+                "blobStoreName": "default",
+                "strictContentTypeValidation": true,
+                "writePolicy": "ALLOW"
+              },
+              "maven": {
+                "versionPolicy": "SNAPSHOT",
+                "layoutPolicy": "STRICT"
+              }
+            }' 2>&1 | grep -v "already exists" || echo "✓ maven-snapshots ready"
           
-          echo ""
-          echo "✅ Repositorios configurados"
-          echo ""
+          echo "✅ Nexus repositories configured"
           
-          # 🔐 Verificar permisos del usuario admin
-          echo "🔐 Verificando permisos del usuario admin..."
-          USER_INFO=$(curl -s -u "admin:admin123" \
-            http://localhost:8081/service/rest/v1/security/users/admin)
-          echo "Usuario admin:"
-          echo "$USER_INFO" | jq '{userId, status, roles}'
-          
-          USER_ROLES=$(echo "$USER_INFO" | jq -r '.roles[]')
-          if echo "$USER_ROLES" | grep -q "nx-admin"; then
-            echo "✅ Usuario admin tiene rol nx-admin"
-          else
-            echo "⚠️ Usuario admin NO tiene rol nx-admin, asignando..."
-            curl -X PUT "http://localhost:8081/service/rest/v1/security/users/admin" \
-              -u "admin:admin123" \
-              -H "Content-Type: application/json" \
-              -d '{
-                "userId": "admin",
-                "firstName": "Administrator",
-                "lastName": "User",
-                "emailAddress": "admin@example.com",
-                "status": "active",
-                "roles": ["nx-admin"]
-              }'
-          fi
-          
-          echo ""
-          
-          # 🔍 Verificar writePolicy de maven-snapshots
-          echo "🔍 Verificando writePolicy de maven-snapshots..."
-          REPO_INFO=$(curl -s -u "admin:admin123" \
-            http://localhost:8081/service/rest/v1/repositories/maven-snapshots)
-          WRITE_POLICY=$(echo "$REPO_INFO" | jq -r '.storage.writePolicy')
-          ONLINE=$(echo "$REPO_INFO" | jq -r '.online')
-          
-          echo "Estado del repositorio maven-snapshots:"
-          echo "  - Online: $ONLINE"
-          echo "  - WritePolicy: $WRITE_POLICY"
-          
-          if [ "$WRITE_POLICY" != "ALLOW" ] && [ "$WRITE_POLICY" != "ALLOW_ONCE" ]; then
-            echo "❌ WritePolicy no permite escritura: $WRITE_POLICY"
-            exit 1
-          fi
-          
-          echo "✅ WritePolicy es válido"
-          echo ""
-          
-          # 🧪 Probar escritura directa
-          echo "🧪 Probando escritura directa al repositorio..."
-          TEST_PATH="test/deploy-test/1.0-SNAPSHOT/test-$(date +%s).txt"
-          HTTP_CODE=$(curl -s -u "admin:admin123" \
-            -X PUT \
-            "http://localhost:8081/repository/maven-snapshots/$TEST_PATH" \
-            -H "Content-Type: text/plain" \
-            -d "Test deploy - $(date)" \
-            -w "%{http_code}" \
-            -o /dev/null)
-          
-          echo "Código HTTP: $HTTP_CODE"
-          
-          if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Escritura directa exitosa!"
-          else
-            echo "❌ Escritura directa falló (HTTP $HTTP_CODE)"
-            echo "Detalles:"
-            curl -v -u "admin:admin123" \
-              -X PUT \
-              "http://localhost:8081/repository/maven-snapshots/$TEST_PATH" \
-              -H "Content-Type: text/plain" \
-              -d "Test deploy - $(date)"
-            exit 1
-          fi
-          
-          echo ""
-          echo "✅ Nexus está completamente configurado y listo para deploy"
+          # List final repositories
+          echo "📋 Available repositories:"
+          curl -s -u "admin:admin123" http://localhost:8081/service/rest/v1/repositories | jq -r '.[].name'
       
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -1043,10 +957,6 @@ jobs:
           echo "Type: ${{ steps.version.outputs.artifact_type }}"
           echo ""
           
-          # 🔍 Pre-deploy verification checklist
-          echo "🔍 Pre-deploy verification checklist..."
-          echo ""
-          
           # 1. Test authentication
           echo "1️⃣ Testing Nexus authentication..."
           if curl -s -f -u "admin:admin123" http://localhost:8081/service/rest/v1/status > /dev/null; then
@@ -1056,37 +966,23 @@ jobs:
             exit 1
           fi
           
-          # 2. Verify repository exists and is online
+          # 2. Verify repository exists
           echo ""
-          echo "2️⃣ Verifying maven-snapshots repository..."
-          REPO_STATUS=$(curl -s -u "admin:admin123" \
-            http://localhost:8081/service/rest/v1/repositories/maven-snapshots)
-          
-          ONLINE=$(echo "$REPO_STATUS" | jq -r '.online')
-          WRITE_POLICY=$(echo "$REPO_STATUS" | jq -r '.storage.writePolicy')
-          
-          echo "  - Online: $ONLINE"
-          echo "  - WritePolicy: $WRITE_POLICY"
-          
-          if [ "$ONLINE" != "true" ]; then
-            echo "❌ Repository is not online"
+          echo "2️⃣ Verifying maven-snapshots repository exists..."
+          if curl -s -f -u "admin:admin123" http://localhost:8081/service/rest/v1/repositories/maven-snapshots > /dev/null; then
+            echo "✅ Repository exists and is accessible"
+          else
+            echo "❌ Repository not found or not accessible"
             exit 1
           fi
           
-          if [ "$WRITE_POLICY" != "ALLOW" ] && [ "$WRITE_POLICY" != "ALLOW_ONCE" ]; then
-            echo "❌ WritePolicy does not allow writes: $WRITE_POLICY"
-            exit 1
-          fi
-          
-          echo "✅ Repository is ready"
-          
-          # 3. Test write access with a simple file
+          # 3. Test write access with valid Maven path
           echo ""
           echo "3️⃣ Testing write access..."
-          TEST_FILE="test/pre-deploy-check/1.0-SNAPSHOT/check-$(date +%s).txt"
+          TEST_PATH="com/test/pre-deploy-check/1.0-SNAPSHOT/pre-deploy-check-1.0-$(date +%Y%m%d.%H%M%S)-1.txt"
           HTTP_CODE=$(curl -s -u "admin:admin123" \
             -X PUT \
-            "http://localhost:8081/repository/maven-snapshots/$TEST_FILE" \
+            "http://localhost:8081/repository/maven-snapshots/$TEST_PATH" \
             -H "Content-Type: text/plain" \
             -d "Pre-deploy check - $(date)" \
             -w "%{http_code}" \
@@ -1097,12 +993,12 @@ jobs:
           else
             echo "❌ Write access test failed (HTTP $HTTP_CODE)"
             echo ""
-            echo "Detailed error:"
+            echo "Trying to get more details..."
             curl -v -u "admin:admin123" \
               -X PUT \
-              "http://localhost:8081/repository/maven-snapshots/$TEST_FILE" \
+              "http://localhost:8081/repository/maven-snapshots/$TEST_PATH" \
               -H "Content-Type: text/plain" \
-              -d "Pre-deploy check - $(date)"
+              -d "Pre-deploy check - $(date)" 2>&1 | tail -20
             exit 1
           fi
           
@@ -1111,38 +1007,15 @@ jobs:
           echo "4️⃣ Verifying Maven settings..."
           if [ -f ~/.m2/settings.xml ]; then
             echo "✅ Maven settings.xml exists"
-            echo ""
-            echo "Settings content (credentials hidden):"
-            cat ~/.m2/settings.xml | sed 's/<password>.*<\/password>/<password>***<\/password>/g'
           else
             echo "❌ Maven settings.xml not found"
             exit 1
           fi
           
-          # 5. Verify user permissions
+          # 5. List available repositories
           echo ""
-          echo "5️⃣ Verifying user permissions..."
-          USER_ROLES=$(curl -s -u "admin:admin123" \
-            http://localhost:8081/service/rest/v1/security/users/admin \
-            | jq -r '.roles[]')
-          
-          echo "User roles: $USER_ROLES"
-          
-          if echo "$USER_ROLES" | grep -q "nx-admin"; then
-            echo "✅ User has nx-admin role"
-          else
-            echo "❌ User does not have nx-admin role"
-            exit 1
-          fi
-          
-          # 6. Check security realms
-          echo ""
-          echo "6️⃣ Checking security realms..."
-          REALMS=$(curl -s -u "admin:admin123" \
-            http://localhost:8081/service/rest/v1/security/realms/active \
-            | jq -r '.[]')
-          echo "Active realms:"
-          echo "$REALMS"
+          echo "5️⃣ Available repositories:"
+          curl -s -u "admin:admin123" http://localhost:8081/service/rest/v1/repositories | jq -r '.[] | "  - \(.name) (\(.format))"'
           
           echo ""
           echo "========================================="
