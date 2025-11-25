@@ -858,8 +858,8 @@ jobs:
         run: |
           echo "🔧 Setting up Nexus repositories..."
           
-          # Accept EULA (required for Nexus 3.86+)
-          echo "📜 Accepting Nexus EULA..."
+          # Complete Nexus onboarding wizard (includes EULA acceptance)
+          echo "📜 Completing Nexus onboarding wizard..."
           
           # Check EULA status
           echo "Checking EULA status..."
@@ -871,36 +871,42 @@ jobs:
           if [ "$EULA_ACCEPTED" = "true" ]; then
             echo "✅ EULA already accepted"
           else
-            echo "EULA not accepted yet, accepting now..."
+            echo "EULA not accepted yet, completing onboarding wizard..."
             
-            # Accept EULA using PUT method
-            EULA_RESULT=$(curl -s -w "\n%{http_code}" \
-              -X PUT "http://localhost:8081/service/rest/v1/system/eula" \
+            # Step 1: Accept EULA by completing the onboarding wizard
+            # The wizard requires accepting EULA and configuring anonymous access
+            echo "Step 1: Accepting EULA via onboarding..."
+            curl -X POST "http://localhost:8081/service/rest/v1/onboarding/eula/accept" \
               -u "admin:admin123" \
               -H "Content-Type: application/json" \
-              -d '{"accepted": true}')
+              -d '{}' || echo "EULA endpoint returned error (may already be processed)"
             
-            HTTP_CODE=$(echo "$EULA_RESULT" | tail -n1)
-            RESPONSE=$(echo "$EULA_RESULT" | head -n-1)
+            # Step 2: Configure anonymous access (required to complete wizard)
+            echo "Step 2: Configuring anonymous access..."
+            curl -X PUT "http://localhost:8081/service/rest/v1/security/anonymous" \
+              -u "admin:admin123" \
+              -H "Content-Type: application/json" \
+              -d '{"enabled":false,"userId":"anonymous","realmName":"NexusAuthorizingRealm"}' \
+              || echo "Anonymous access already configured"
             
-            echo "HTTP Code: $HTTP_CODE"
-            echo "Response: $RESPONSE"
+            # Step 3: Mark onboarding as complete
+            echo "Step 3: Completing onboarding..."
+            curl -X POST "http://localhost:8081/service/rest/v1/onboarding/complete" \
+              -u "admin:admin123" \
+              -H "Content-Type: application/json" \
+              -d '{}' || echo "Onboarding completion endpoint returned error"
             
-            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "204" ]; then
-              echo "✅ EULA accepted successfully"
+            # Verify EULA status after onboarding
+            echo "Verifying EULA status after onboarding..."
+            EULA_STATUS_AFTER=$(curl -s -u "admin:admin123" http://localhost:8081/service/rest/v1/system/eula)
+            echo "$EULA_STATUS_AFTER" | jq '.'
+            
+            EULA_ACCEPTED_AFTER=$(echo "$EULA_STATUS_AFTER" | jq -r '.accepted')
+            if [ "$EULA_ACCEPTED_AFTER" = "true" ]; then
+              echo "✅ EULA accepted successfully via onboarding"
             else
-              echo "❌ EULA acceptance failed (HTTP $HTTP_CODE)"
-              echo "Trying alternative method..."
-              
-              # Try POST to /accept endpoint as fallback
-              curl -X POST "http://localhost:8081/service/rest/v1/system/eula/accept" \
-                -u "admin:admin123" \
-                -H "Content-Type: application/json" || echo "Alternative method also failed"
+              echo "⚠️ EULA still not accepted, but continuing (may work anyway)"
             fi
-            
-            # Verify EULA status after acceptance
-            echo "Verifying EULA status after acceptance..."
-            curl -s -u "admin:admin123" http://localhost:8081/service/rest/v1/system/eula | jq '.'
           fi
           
           echo ""
