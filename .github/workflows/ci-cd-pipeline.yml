@@ -2216,8 +2216,19 @@ jobs:
             echo "color=danger" >> $GITHUB_OUTPUT
           fi
       
+      - name: Check Slack configuration
+        id: slack_check
+        run: |
+          if [ -z "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Slack webhook not configured - Notifications will be skipped"
+          else
+            echo "configured=true" >> $GITHUB_OUTPUT
+            echo "✅ Slack webhook configured"
+          fi
+      
       - name: Send Slack notification on success
-        if: steps.status.outputs.status == 'success'
+        if: steps.status.outputs.status == 'success' && steps.slack_check.outputs.configured == 'true'
         uses: slackapi/slack-github-action@v1.25.0
         with:
           payload: |
@@ -2269,7 +2280,7 @@ jobs:
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
       
       - name: Send Slack notification on failure
-        if: steps.status.outputs.status == 'failure'
+        if: steps.status.outputs.status == 'failure' && steps.slack_check.outputs.configured == 'true'
         uses: slackapi/slack-github-action@v1.25.0
         with:
           payload: |
