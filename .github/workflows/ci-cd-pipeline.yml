@@ -592,10 +592,7 @@ jobs:
       - name: Run integration tests
         run: |
           echo "🧪 Running integration tests..."
-          mvn test \
-            -Dspring.datasource.url=jdbc:postgresql://localhost:5432/devops_platform_test \
-            -Dspring.datasource.username=postgres \
-            -Dspring.datasource.password=postgres
+          mvn test
         working-directory: ./backend
       
       - name: Upload integration test results
