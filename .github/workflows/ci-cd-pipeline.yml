@@ -730,9 +730,96 @@ jobs:
        github.ref == 'refs/heads/main' || 
        startsWith(github.ref, 'refs/heads/release/'))
     
+    services:
+      nexus:
+        image: sonatype/nexus3:latest
+        ports:
+          - 8081:8081
+        options: >-
+          --health-cmd "curl -f http://localhost:8081/service/rest/v1/status || exit 1"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 20
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      - name: Wait for Nexus to be ready
+        run: |
+          echo "⏳ Waiting for Nexus to start (this may take 2-3 minutes)..."
+          for i in {1..60}; do
+            if curl -f http://localhost:8081/service/rest/v1/status 2>/dev/null; then
+              echo "✅ Nexus is ready!"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "❌ Nexus failed to start after 10 minutes"
+              exit 1
+            fi
+            echo "Attempt $i/60: Nexus not ready yet..."
+            sleep 10
+          done
+      
+      - name: Get Nexus admin password
+        id: nexus-password
+        run: |
+          # Wait a bit more for Nexus to fully initialize
+          sleep 30
+          
+          # Try to get the initial admin password from container
+          CONTAINER_ID=$(docker ps -q -f ancestor=sonatype/nexus3:latest)
+          if [ -n "$CONTAINER_ID" ]; then
+            ADMIN_PASSWORD=$(docker exec $CONTAINER_ID cat /nexus-data/admin.password 2>/dev/null || echo "admin123")
+            echo "password=$ADMIN_PASSWORD" >> $GITHUB_OUTPUT
+            echo "Using admin password from container"
+          else
+            echo "password=admin123" >> $GITHUB_OUTPUT
+            echo "Using default password"
+          fi
+      
+      - name: Setup Nexus repositories
+        run: |
+          echo "🔧 Setting up Nexus repositories..."
+          NEXUS_PASSWORD="${{ steps.nexus-password.outputs.password }}"
+          
+          # Create maven-releases repository
+          curl -X POST "http://localhost:8081/service/rest/v1/repositories/maven/hosted" \
+            -u "admin:$NEXUS_PASSWORD" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "maven-releases",
+              "online": true,
+              "storage": {
+                "blobStoreName": "default",
+                "strictContentTypeValidation": true,
+                "writePolicy": "ALLOW_ONCE"
+              },
+              "maven": {
+                "versionPolicy": "RELEASE",
+                "layoutPolicy": "STRICT"
+              }
+            }' || echo "Repository may already exist"
+          
+          # Create maven-snapshots repository
+          curl -X POST "http://localhost:8081/service/rest/v1/repositories/maven/hosted" \
+            -u "admin:$NEXUS_PASSWORD" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "maven-snapshots",
+              "online": true,
+              "storage": {
+                "blobStoreName": "default",
+                "strictContentTypeValidation": true,
+                "writePolicy": "ALLOW"
+              },
+              "maven": {
+                "versionPolicy": "SNAPSHOT",
+                "layoutPolicy": "STRICT"
+              }
+            }' || echo "Repository may already exist"
+          
+          echo "✅ Nexus repositories configured"
       
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -744,18 +831,18 @@ jobs:
       - name: Configure Maven settings
         run: |
           mkdir -p ~/.m2
-          cat > ~/.m2/settings.xml << 'EOF'
+          cat > ~/.m2/settings.xml << EOF
           <settings>
             <servers>
               <server>
                 <id>nexus-snapshots</id>
-                <username>${{ secrets.NEXUS_USERNAME }}</username>
-                <password>${{ secrets.NEXUS_PASSWORD }}</password>
+                <username>admin</username>
+                <password>${{ steps.nexus-password.outputs.password }}</password>
               </server>
               <server>
                 <id>nexus-releases</id>
-                <username>${{ secrets.NEXUS_USERNAME }}</username>
-                <password>${{ secrets.NEXUS_PASSWORD }}</password>
+                <username>admin</username>
+                <password>${{ steps.nexus-password.outputs.password }}</password>
               </server>
             </servers>
           </settings>
@@ -781,13 +868,17 @@ jobs:
           echo "Version: ${{ steps.version.outputs.version }}"
           echo "Type: ${{ steps.version.outputs.artifact_type }}"
           
+          # Use localhost Nexus running as service
+          if [ "${{ steps.version.outputs.artifact_type }}" == "RELEASE" ]; then
+            REPO="maven-releases"
+          else
+            REPO="maven-snapshots"
+          fi
+          
           mvn deploy -DskipTests \
             -Dmaven.install.skip=true \
-            -DaltDeploymentRepository=nexus::default::${{ secrets.NEXUS_URL }}/repository/maven-${{ steps.version.outputs.artifact_type == 'RELEASE' && 'releases' || 'snapshots' }}
+            -DaltDeploymentRepository=nexus::default::http://localhost:8081/repository/$REPO
         working-directory: ./backend
-        env:
-          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
       
       - name: Tag artifact
         run: |
