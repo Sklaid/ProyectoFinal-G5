@@ -25,12 +25,13 @@ public class EmployeeGenerator {
                 .ofMinLength(2)
                 .ofMaxLength(50);
         
+        // Add timestamp to ensure email uniqueness across test runs
         Arbitrary<String> emails = Arbitraries.strings()
                 .alpha()
                 .numeric()
                 .ofMinLength(3)
-                .ofMaxLength(20)
-                .map(s -> s + "@example.com");
+                .ofMaxLength(15)
+                .map(s -> s + System.nanoTime() + "@example.com");
         
         Arbitrary<String> phones = Arbitraries.strings()
                 .numeric()

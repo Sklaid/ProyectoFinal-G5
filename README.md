@@ -170,26 +170,27 @@ Detailed documentation can be found in the `Documentacion/` directory:
 - Value Stream Mapping
 - DevOps maturity assessment (DSOOM)
 
-### 🔧 Nexus Deploy - Solución Error 401
+### 🔧 Nexus Deploy
 
-**Problema**: Error 401 Unauthorized al hacer `mvn deploy`
-
-**Causa**: Variables de entorno no definidas
-
-**Solución rápida**:
+**Setup local**:
 ```bash
-# Windows
-scripts\setup-nexus-env.bat
-
-# Linux/Mac
-source scripts/setup-nexus-env.sh
-
-# Luego deployar
-cd backend
-mvn deploy -DskipTests
+scripts\setup-nexus-env.bat  # Windows
+source scripts/setup-nexus-env.sh  # Linux/Mac
+cd backend && mvn deploy -DskipTests
 ```
 
-**Documentación**: [Solución Completa](Documentacion/NEXUS_REAL_SOLUTION.md)
+**Documentación**: Ver `Documentacion/Nexus/NEXUS_QUICK_START.md`
+
+### 🚀 Production Deployment
+
+**Flujo con Pull Request**:
+1. Desarrollar en `develop` → Pipeline ejecuta hasta Tag STABLE
+2. Crear PR de `develop` → `main`
+3. Merge PR → Pipeline ejecuta Canary → Production → Tag GOLD
+
+**Documentación**:
+- [Branch Protection Setup](Documentacion/BRANCH_PROTECTION_SETUP.md)
+- [Pull Request Workflow](Documentacion/PULL_REQUEST_WORKFLOW.md)
 
 ## License
 

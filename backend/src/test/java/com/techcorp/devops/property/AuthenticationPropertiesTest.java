@@ -47,6 +47,16 @@ public class AuthenticationPropertiesTest {
     private MockMvc mockMvc;
     
     /**
+     * Clean database before each property test to avoid unique constraint violations
+     * This is critical for property-based tests that run 100+ iterations
+     */
+    @org.junit.jupiter.api.BeforeEach
+    public void cleanupDatabase() {
+        userRepository.deleteAll();
+        userRepository.flush(); // Force immediate deletion
+    }
+    
+    /**
      * Feature: devops-enterprise-platform, Property 1: Valid credentials authenticate successfully
      */
     @Property(tries = 100)
@@ -159,10 +169,12 @@ public class AuthenticationPropertiesTest {
     
     @Provide
     Arbitrary<ValidUserCredentials> validUserCredentials() {
+        // Add timestamp to ensure uniqueness across test runs
         Arbitrary<String> usernames = Arbitraries.strings()
                 .withCharRange('a', 'z')
                 .ofMinLength(5)
-                .ofMaxLength(20);
+                .ofMaxLength(15)
+                .map(name -> name + System.nanoTime()); // Add nanosecond timestamp for uniqueness
         
         Arbitrary<String> passwords = Arbitraries.strings()
                 .withCharRange('a', 'z')
