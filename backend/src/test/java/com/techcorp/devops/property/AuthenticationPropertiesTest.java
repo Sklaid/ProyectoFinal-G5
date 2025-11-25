@@ -53,6 +53,9 @@ public class AuthenticationPropertiesTest {
     public void validCredentials_ShouldAuthenticateSuccessfully(
             @ForAll("validUserCredentials") ValidUserCredentials credentials) {
         
+        // Cleanup before test to avoid unique constraint violations
+        userRepository.deleteAll();
+        
         try {
             // Arrange: Create user with hashed password
             User user = User.builder()
@@ -91,6 +94,9 @@ public class AuthenticationPropertiesTest {
             @ForAll("validUserCredentials") ValidUserCredentials validCreds,
             @ForAll("invalidCredentials") String invalidPassword) {
         
+        // Cleanup before test to avoid unique constraint violations
+        userRepository.deleteAll();
+        
         try {
             // Arrange: Create user with valid credentials
             User user = User.builder()
@@ -123,6 +129,9 @@ public class AuthenticationPropertiesTest {
     public void nonExistentUsername_ShouldBeRejected(
             @ForAll("validUserCredentials") ValidUserCredentials credentials,
             @ForAll("nonExistentUsername") String nonExistentUsername) {
+        
+        // Cleanup before test to avoid unique constraint violations
+        userRepository.deleteAll();
         
         try {
             // Arrange: Create user with valid credentials
@@ -251,6 +260,9 @@ public class AuthenticationPropertiesTest {
     public void logout_ShouldInvalidateToken(
             @ForAll("validUserCredentials") ValidUserCredentials credentials) {
         
+        // Cleanup before test to avoid unique constraint violations
+        userRepository.deleteAll();
+        
         try {
             // Arrange: Create user and login to get a valid token
             User user = User.builder()
@@ -295,6 +307,9 @@ public class AuthenticationPropertiesTest {
     @Property(tries = 100)
     public void storedPasswords_ShouldBeSecurelyHashed(
             @ForAll("validUserCredentials") ValidUserCredentials credentials) {
+        
+        // Cleanup before test to avoid unique constraint violations
+        userRepository.deleteAll();
         
         try {
             // Arrange: Create user with plaintext password
