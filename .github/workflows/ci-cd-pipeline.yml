@@ -858,69 +858,90 @@ jobs:
         run: |
           echo "🔧 Setting up Nexus repositories..."
           
-          # Accept EULA by modifying Nexus configuration directly
+          # Accept EULA using the correct API endpoint
           echo "📜 Accepting Nexus EULA..."
           
-          # Get container ID
-          CONTAINER_ID=$(docker ps -q -f "ancestor=sonatype/nexus3:latest" | head -n 1)
-          echo "Nexus container ID: $CONTAINER_ID"
+          # Step 1: Get the EULA agreement text (required for acceptance)
+          echo "Getting EULA agreement..."
+          EULA_DATA=$(curl -s -u "admin:admin123" http://localhost:8081/service/rest/v1/system/eula)
+          echo "$EULA_DATA" | jq '.'
           
-          # Method 1: Create EULA acceptance file directly in the container
-          echo "Creating EULA acceptance file..."
-          docker exec $CONTAINER_ID bash -c "mkdir -p /nexus-data/etc && echo 'true' > /nexus-data/etc/eula-accepted"
+          EULA_ACCEPTED=$(echo "$EULA_DATA" | jq -r '.accepted')
           
-          # Method 2: Also try via API (belt and suspenders approach)
-          echo "Attempting EULA acceptance via API..."
-          curl -X POST "http://localhost:8081/service/rest/v1/onboarding/eula/accept" \
-            -u "admin:admin123" \
-            -H "Content-Type: application/json" \
-            -d '{}' || echo "API method completed"
-          
-          # Configure anonymous access
-          echo "Configuring anonymous access..."
-          curl -X PUT "http://localhost:8081/service/rest/v1/security/anonymous" \
-            -u "admin:admin123" \
-            -H "Content-Type: application/json" \
-            -d '{"enabled":false,"userId":"anonymous","realmName":"NexusAuthorizingRealm"}' \
-            || echo "Anonymous access configured"
-          
-          # Complete onboarding
-          echo "Completing onboarding..."
-          curl -X POST "http://localhost:8081/service/rest/v1/onboarding/complete" \
-            -u "admin:admin123" \
-            -H "Content-Type: application/json" \
-            -d '{}' || echo "Onboarding completed"
-          
-          # Wait a moment for changes to take effect
-          echo "Waiting for changes to take effect..."
-          sleep 5
-          
-          # Verify EULA status
-          echo "Verifying EULA status..."
-          EULA_STATUS=$(curl -s -u "admin:admin123" http://localhost:8081/service/rest/v1/system/eula)
-          echo "$EULA_STATUS" | jq '.'
-          
-          EULA_ACCEPTED=$(echo "$EULA_STATUS" | jq -r '.accepted')
           if [ "$EULA_ACCEPTED" = "true" ]; then
-            echo "✅ EULA accepted successfully"
+            echo "✅ EULA already accepted"
           else
-            echo "⚠️ EULA status still shows false, but file was created"
-            echo "Testing write access to verify if it actually works..."
+            echo "EULA not accepted yet, accepting now..."
             
-            # Test write access regardless of EULA status
-            TEST_PATH="com/test/eula-check/1.0-SNAPSHOT/eula-check-1.0-$(date +%Y%m%d.%H%M%S)-1.txt"
-            HTTP_CODE=$(curl -s -u "admin:admin123" \
-              -X PUT \
-              "http://localhost:8081/repository/maven-snapshots/$TEST_PATH" \
-              -H "Content-Type: text/plain" \
-              -d "EULA test" \
-              -w "%{http_code}" \
-              -o /dev/null)
+            # Step 2: Accept EULA using POST with the complete EULA data
+            # According to Sonatype docs, we need to POST the same data with accepted=true
+            echo "Accepting EULA via REST API..."
             
-            if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-              echo "✅ Write access works! EULA is effectively accepted."
+            DISCLAIMER=$(echo "$EULA_DATA" | jq -r '.disclaimer')
+            
+            ACCEPT_RESULT=$(curl -s -w "\n%{http_code}" \
+              -X POST "http://localhost:8081/service/rest/v1/system/eula" \
+              -u "admin:admin123" \
+              -H "Content-Type: application/json" \
+              -d "{\"accepted\": true, \"disclaimer\": $(echo "$DISCLAIMER" | jq -R .)}")
+            
+            HTTP_CODE=$(echo "$ACCEPT_RESULT" | tail -n1)
+            RESPONSE=$(echo "$ACCEPT_RESULT" | head -n-1)
+            
+            echo "HTTP Code: $HTTP_CODE"
+            echo "Response: $RESPONSE"
+            
+            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "204" ]; then
+              echo "✅ EULA accepted successfully via API"
             else
-              echo "❌ Write access failed (HTTP $HTTP_CODE) - EULA issue persists"
+              echo "⚠️ API returned HTTP $HTTP_CODE, trying alternative method..."
+              
+              # Fallback: Create EULA file directly in container
+              CONTAINER_ID=$(docker ps -q -f "ancestor=sonatype/nexus3:latest" | head -n 1)
+              echo "Creating EULA acceptance file in container $CONTAINER_ID..."
+              docker exec $CONTAINER_ID bash -c "mkdir -p /nexus-data/etc && echo 'true' > /nexus-data/etc/eula-accepted"
+            fi
+            
+            # Step 3: Configure anonymous access (part of onboarding)
+            echo "Configuring anonymous access..."
+            curl -X PUT "http://localhost:8081/service/rest/v1/security/anonymous" \
+              -u "admin:admin123" \
+              -H "Content-Type: application/json" \
+              -d '{"enabled":false,"userId":"anonymous","realmName":"NexusAuthorizingRealm"}' \
+              || echo "Anonymous access configured"
+            
+            # Wait for changes to take effect
+            echo "Waiting for changes to take effect..."
+            sleep 5
+            
+            # Step 4: Verify EULA status
+            echo "Verifying EULA status..."
+            EULA_STATUS_AFTER=$(curl -s -u "admin:admin123" http://localhost:8081/service/rest/v1/system/eula)
+            echo "$EULA_STATUS_AFTER" | jq '.'
+            
+            EULA_ACCEPTED_AFTER=$(echo "$EULA_STATUS_AFTER" | jq -r '.accepted')
+            if [ "$EULA_ACCEPTED_AFTER" = "true" ]; then
+              echo "✅ EULA accepted successfully"
+            else
+              echo "⚠️ EULA status still shows false"
+              echo "Testing write access to verify if it actually works..."
+              
+              # Test write access
+              TEST_PATH="com/test/eula-check/1.0-SNAPSHOT/eula-check-1.0-$(date +%Y%m%d.%H%M%S)-1.txt"
+              HTTP_CODE=$(curl -s -u "admin:admin123" \
+                -X PUT \
+                "http://localhost:8081/repository/maven-snapshots/$TEST_PATH" \
+                -H "Content-Type: text/plain" \
+                -d "EULA test" \
+                -w "%{http_code}" \
+                -o /dev/null)
+              
+              if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+                echo "✅ Write access works! EULA is effectively accepted."
+              else
+                echo "❌ Write access failed (HTTP $HTTP_CODE) - EULA issue persists"
+                exit 1
+              fi
             fi
           fi
           
