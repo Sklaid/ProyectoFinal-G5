@@ -747,19 +747,45 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Wait for Nexus to be ready
+      - name: Wait for Nexus Complete Initialization
         run: |
-          echo "⏳ Waiting for Nexus to start (this may take 2-3 minutes)..."
-          for i in {1..60}; do
-            if curl -f http://localhost:8081/service/rest/v1/status 2>/dev/null; then
-              echo "✅ Nexus is ready!"
-              break
+          echo "⏳ Esperando inicialización completa de Nexus..."
+          echo "Este proceso puede tomar varios minutos..."
+          echo ""
+          
+          for i in {1..180}; do  # 30 minutos máximo
+            # Verificar que el repositorio está accesible Y permite escritura
+            if curl -s -f -u "admin:admin123" \
+              http://localhost:8081/service/rest/v1/repositories/maven-snapshots \
+              >/dev/null 2>&1; then
+              
+              # Verificar writePolicy
+              WRITE_POLICY=$(curl -s -u "admin:admin123" \
+                http://localhost:8081/service/rest/v1/repositories/maven-snapshots \
+                | jq -r '.storage.writePolicy' 2>/dev/null || echo "UNKNOWN")
+              
+              if [ "$WRITE_POLICY" = "ALLOW" ] || [ "$WRITE_POLICY" = "ALLOW_ONCE" ]; then
+                echo "✅ Nexus está listo y permite escritura!"
+                echo "   WritePolicy: $WRITE_POLICY"
+                echo ""
+                echo "⏳ Esperando 30 segundos adicionales de seguridad..."
+                sleep 30
+                break
+              else
+                echo "Intento $i/180: WritePolicy=$WRITE_POLICY (esperando ALLOW)"
+              fi
+            else
+              echo "Intento $i/180: Repositorio maven-snapshots no accesible aún"
             fi
-            if [ $i -eq 60 ]; then
-              echo "❌ Nexus failed to start after 10 minutes"
+            
+            if [ $i -eq 180 ]; then
+              echo "❌ Nexus no está listo después de 30 minutos"
+              echo ""
+              echo "Logs de Nexus:"
+              docker logs $(docker ps -q -f "ancestor=sonatype/nexus3:latest") --tail 100
               exit 1
             fi
-            echo "Attempt $i/60: Nexus not ready yet..."
+            
             sleep 10
           done
       
@@ -857,72 +883,140 @@ jobs:
       - name: Setup Nexus repositories
         run: |
           echo "🔧 Setting up Nexus repositories..."
+          echo ""
           
-          # Check if repositories already exist
-          echo "📋 Checking existing repositories..."
-          curl -u "admin:admin123" http://localhost:8081/service/rest/v1/repositories | jq -r '.[].name' || true
+          # 📋 Verificar repositorios existentes
+          echo "📋 Verificando repositorios existentes..."
+          EXISTING_REPOS=$(curl -s -u "admin:admin123" \
+            http://localhost:8081/service/rest/v1/repositories | jq -r '.[].name')
+          echo "Repositorios actuales:"
+          echo "$EXISTING_REPOS"
+          echo ""
           
-          # Create maven-releases repository (ignore if exists)
-          echo "Creating maven-releases repository..."
-          curl -X POST "http://localhost:8081/service/rest/v1/repositories/maven/hosted" \
-            -u "admin:admin123" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "name": "maven-releases",
-              "online": true,
-              "storage": {
-                "blobStoreName": "default",
-                "strictContentTypeValidation": true,
-                "writePolicy": "ALLOW_ONCE"
-              },
-              "maven": {
-                "versionPolicy": "RELEASE",
-                "layoutPolicy": "STRICT"
-              }
-            }' 2>&1 | grep -v "already exists" || echo "✓ maven-releases ready"
+          # Crear maven-releases si no existe
+          if echo "$EXISTING_REPOS" | grep -q "maven-releases"; then
+            echo "✓ maven-releases ya existe"
+          else
+            echo "Creando maven-releases..."
+            curl -X POST "http://localhost:8081/service/rest/v1/repositories/maven/hosted" \
+              -u "admin:admin123" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "name": "maven-releases",
+                "online": true,
+                "storage": {
+                  "blobStoreName": "default",
+                  "strictContentTypeValidation": true,
+                  "writePolicy": "ALLOW_ONCE"
+                },
+                "maven": {
+                  "versionPolicy": "RELEASE",
+                  "layoutPolicy": "STRICT"
+                }
+              }' && echo "✓ maven-releases creado" || echo "⚠ Error creando maven-releases"
+          fi
           
-          # Create maven-snapshots repository (ignore if exists)
-          echo "Creating maven-snapshots repository..."
-          curl -X POST "http://localhost:8081/service/rest/v1/repositories/maven/hosted" \
-            -u "admin:admin123" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "name": "maven-snapshots",
-              "online": true,
-              "storage": {
-                "blobStoreName": "default",
-                "strictContentTypeValidation": true,
-                "writePolicy": "ALLOW"
-              },
-              "maven": {
-                "versionPolicy": "SNAPSHOT",
-                "layoutPolicy": "STRICT"
-              }
-            }' 2>&1 | grep -v "already exists" || echo "✓ maven-snapshots ready"
+          # Crear maven-snapshots si no existe
+          if echo "$EXISTING_REPOS" | grep -q "maven-snapshots"; then
+            echo "✓ maven-snapshots ya existe"
+          else
+            echo "Creando maven-snapshots..."
+            curl -X POST "http://localhost:8081/service/rest/v1/repositories/maven/hosted" \
+              -u "admin:admin123" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "name": "maven-snapshots",
+                "online": true,
+                "storage": {
+                  "blobStoreName": "default",
+                  "strictContentTypeValidation": true,
+                  "writePolicy": "ALLOW"
+                },
+                "maven": {
+                  "versionPolicy": "SNAPSHOT",
+                  "layoutPolicy": "STRICT"
+                }
+              }' && echo "✓ maven-snapshots creado" || echo "⚠ Error creando maven-snapshots"
+          fi
           
-          echo "✅ Nexus repositories configured"
+          echo ""
+          echo "✅ Repositorios configurados"
+          echo ""
           
-          # List final repositories
-          echo "📋 Available repositories:"
-          curl -u "admin:admin123" http://localhost:8081/service/rest/v1/repositories | jq -r '.[].name'
+          # 🔐 Verificar permisos del usuario admin
+          echo "🔐 Verificando permisos del usuario admin..."
+          USER_INFO=$(curl -s -u "admin:admin123" \
+            http://localhost:8081/service/rest/v1/security/users/admin)
+          echo "Usuario admin:"
+          echo "$USER_INFO" | jq '{userId, status, roles}'
           
-          # Verify admin user has deployment privileges
-          echo "🔐 Verifying admin user privileges..."
-          curl -u "admin:admin123" http://localhost:8081/service/rest/v1/security/users/admin | jq '.'
+          USER_ROLES=$(echo "$USER_INFO" | jq -r '.roles[]')
+          if echo "$USER_ROLES" | grep -q "nx-admin"; then
+            echo "✅ Usuario admin tiene rol nx-admin"
+          else
+            echo "⚠️ Usuario admin NO tiene rol nx-admin, asignando..."
+            curl -X PUT "http://localhost:8081/service/rest/v1/security/users/admin" \
+              -u "admin:admin123" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "userId": "admin",
+                "firstName": "Administrator",
+                "lastName": "User",
+                "emailAddress": "admin@example.com",
+                "status": "active",
+                "roles": ["nx-admin"]
+              }'
+          fi
           
-          # Enable deployment for admin user (ensure nx-admin role)
-          echo "🔧 Ensuring admin has deployment privileges..."
-          curl -X PUT "http://localhost:8081/service/rest/v1/security/users/admin" \
-            -u "admin:admin123" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "userId": "admin",
-              "firstName": "Administrator",
-              "lastName": "User",
-              "emailAddress": "admin@example.com",
-              "status": "active",
-              "roles": ["nx-admin"]
-            }' || echo "Admin user already configured"
+          echo ""
+          
+          # 🔍 Verificar writePolicy de maven-snapshots
+          echo "🔍 Verificando writePolicy de maven-snapshots..."
+          REPO_INFO=$(curl -s -u "admin:admin123" \
+            http://localhost:8081/service/rest/v1/repositories/maven-snapshots)
+          WRITE_POLICY=$(echo "$REPO_INFO" | jq -r '.storage.writePolicy')
+          ONLINE=$(echo "$REPO_INFO" | jq -r '.online')
+          
+          echo "Estado del repositorio maven-snapshots:"
+          echo "  - Online: $ONLINE"
+          echo "  - WritePolicy: $WRITE_POLICY"
+          
+          if [ "$WRITE_POLICY" != "ALLOW" ] && [ "$WRITE_POLICY" != "ALLOW_ONCE" ]; then
+            echo "❌ WritePolicy no permite escritura: $WRITE_POLICY"
+            exit 1
+          fi
+          
+          echo "✅ WritePolicy es válido"
+          echo ""
+          
+          # 🧪 Probar escritura directa
+          echo "🧪 Probando escritura directa al repositorio..."
+          TEST_PATH="test/deploy-test/1.0-SNAPSHOT/test-$(date +%s).txt"
+          HTTP_CODE=$(curl -s -u "admin:admin123" \
+            -X PUT \
+            "http://localhost:8081/repository/maven-snapshots/$TEST_PATH" \
+            -H "Content-Type: text/plain" \
+            -d "Test deploy - $(date)" \
+            -w "%{http_code}" \
+            -o /dev/null)
+          
+          echo "Código HTTP: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Escritura directa exitosa!"
+          else
+            echo "❌ Escritura directa falló (HTTP $HTTP_CODE)"
+            echo "Detalles:"
+            curl -v -u "admin:admin123" \
+              -X PUT \
+              "http://localhost:8081/repository/maven-snapshots/$TEST_PATH" \
+              -H "Content-Type: text/plain" \
+              -d "Test deploy - $(date)"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✅ Nexus está completamente configurado y listo para deploy"
       
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -968,52 +1062,145 @@ jobs:
       
       - name: Deploy to Nexus
         run: |
-          echo "📦 Publishing artifact to Nexus..."
+          echo "========================================="
+          echo "📦 Deploying to Nexus Repository"
+          echo "========================================="
           echo "Version: ${{ steps.version.outputs.version }}"
           echo "Type: ${{ steps.version.outputs.artifact_type }}"
+          echo ""
           
-          # Test authentication before deploying
-          echo "🔍 Testing Nexus authentication..."
-          if curl -u "admin:admin123" -f http://localhost:8081/service/rest/v1/status; then
+          # 🔍 Pre-deploy verification checklist
+          echo "🔍 Pre-deploy verification checklist..."
+          echo ""
+          
+          # 1. Test authentication
+          echo "1️⃣ Testing Nexus authentication..."
+          if curl -s -f -u "admin:admin123" http://localhost:8081/service/rest/v1/status > /dev/null; then
             echo "✅ Authentication successful"
           else
             echo "❌ Authentication failed"
             exit 1
           fi
           
-          # Verify repositories exist and are accessible
-          echo "📋 Verifying repositories..."
-          curl -u "admin:admin123" http://localhost:8081/service/rest/v1/repositories | jq -r '.[] | "\(.name) - \(.format) - \(.type)"'
+          # 2. Verify repository exists and is online
+          echo ""
+          echo "2️⃣ Verifying maven-snapshots repository..."
+          REPO_STATUS=$(curl -s -u "admin:admin123" \
+            http://localhost:8081/service/rest/v1/repositories/maven-snapshots)
           
-          # Test write access to repository
-          echo "🔍 Testing write access to maven-snapshots..."
-          TEST_RESULT=$(curl -u "admin:admin123" \
-            -X GET \
-            "http://localhost:8081/service/rest/v1/repositories/maven-snapshots" \
-            -w "%{http_code}" \
-            -o /dev/null \
-            -s)
+          ONLINE=$(echo "$REPO_STATUS" | jq -r '.online')
+          WRITE_POLICY=$(echo "$REPO_STATUS" | jq -r '.storage.writePolicy')
           
-          if [ "$TEST_RESULT" = "200" ]; then
-            echo "✅ Repository is accessible"
-          else
-            echo "❌ Repository returned HTTP $TEST_RESULT"
+          echo "  - Online: $ONLINE"
+          echo "  - WritePolicy: $WRITE_POLICY"
+          
+          if [ "$ONLINE" != "true" ]; then
+            echo "❌ Repository is not online"
             exit 1
           fi
           
-          # Display Maven settings for debugging
-          echo "📄 Maven settings.xml:"
-          cat ~/.m2/settings.xml
+          if [ "$WRITE_POLICY" != "ALLOW" ] && [ "$WRITE_POLICY" != "ALLOW_ONCE" ]; then
+            echo "❌ WritePolicy does not allow writes: $WRITE_POLICY"
+            exit 1
+          fi
           
-          # Deploy using pom.xml distributionManagement configuration
-          echo "🚀 Deploying to Nexus..."
+          echo "✅ Repository is ready"
+          
+          # 3. Test write access with a simple file
+          echo ""
+          echo "3️⃣ Testing write access..."
+          TEST_FILE="test/pre-deploy-check/1.0-SNAPSHOT/check-$(date +%s).txt"
+          HTTP_CODE=$(curl -s -u "admin:admin123" \
+            -X PUT \
+            "http://localhost:8081/repository/maven-snapshots/$TEST_FILE" \
+            -H "Content-Type: text/plain" \
+            -d "Pre-deploy check - $(date)" \
+            -w "%{http_code}" \
+            -o /dev/null)
+          
+          if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Write access confirmed (HTTP $HTTP_CODE)"
+          else
+            echo "❌ Write access test failed (HTTP $HTTP_CODE)"
+            echo ""
+            echo "Detailed error:"
+            curl -v -u "admin:admin123" \
+              -X PUT \
+              "http://localhost:8081/repository/maven-snapshots/$TEST_FILE" \
+              -H "Content-Type: text/plain" \
+              -d "Pre-deploy check - $(date)"
+            exit 1
+          fi
+          
+          # 4. Verify Maven settings
+          echo ""
+          echo "4️⃣ Verifying Maven settings..."
+          if [ -f ~/.m2/settings.xml ]; then
+            echo "✅ Maven settings.xml exists"
+            echo ""
+            echo "Settings content (credentials hidden):"
+            cat ~/.m2/settings.xml | sed 's/<password>.*<\/password>/<password>***<\/password>/g'
+          else
+            echo "❌ Maven settings.xml not found"
+            exit 1
+          fi
+          
+          # 5. Verify user permissions
+          echo ""
+          echo "5️⃣ Verifying user permissions..."
+          USER_ROLES=$(curl -s -u "admin:admin123" \
+            http://localhost:8081/service/rest/v1/security/users/admin \
+            | jq -r '.roles[]')
+          
+          echo "User roles: $USER_ROLES"
+          
+          if echo "$USER_ROLES" | grep -q "nx-admin"; then
+            echo "✅ User has nx-admin role"
+          else
+            echo "❌ User does not have nx-admin role"
+            exit 1
+          fi
+          
+          # 6. Check security realms
+          echo ""
+          echo "6️⃣ Checking security realms..."
+          REALMS=$(curl -s -u "admin:admin123" \
+            http://localhost:8081/service/rest/v1/security/realms/active \
+            | jq -r '.[]')
+          echo "Active realms:"
+          echo "$REALMS"
+          
+          echo ""
+          echo "========================================="
+          echo "✅ All pre-deploy checks passed!"
+          echo "========================================="
+          echo ""
+          
+          # 🚀 Deploy to Nexus
+          echo "🚀 Starting Maven deploy..."
+          echo ""
+          
           mvn deploy -DskipTests \
             -Dnexus.url=http://localhost:8081 \
             -Dnexus.releases.repo=maven-releases \
             -Dnexus.snapshots.repo=maven-snapshots \
             -Dmaven.wagon.http.ssl.insecure=true \
             -Dmaven.wagon.http.ssl.allowall=true \
-            -X
+            -X || {
+              echo ""
+              echo "========================================="
+              echo "❌ Maven deploy failed!"
+              echo "========================================="
+              echo ""
+              echo "Nexus logs:"
+              docker logs $(docker ps -q -f "ancestor=sonatype/nexus3:latest") --tail 100
+              exit 1
+            }
+          
+          echo ""
+          echo "========================================="
+          echo "✅ Deploy successful!"
+          echo "========================================="
         working-directory: ./backend
       
       - name: Tag artifact

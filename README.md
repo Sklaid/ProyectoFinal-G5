@@ -162,13 +162,34 @@ The project uses GitHub Actions for continuous integration and deployment. The p
 
 ## Documentation
 
-Detailed documentation can be found in the `docs/` directory:
+Detailed documentation can be found in the `Documentacion/` directory:
 
 - Architecture documentation
 - API documentation
 - Deployment guides
 - Value Stream Mapping
 - DevOps maturity assessment (DSOOM)
+
+### 🔧 Nexus Deploy - Solución Error 401
+
+**Problema**: Error 401 Unauthorized al hacer `mvn deploy`
+
+**Causa**: Variables de entorno no definidas
+
+**Solución rápida**:
+```bash
+# Windows
+scripts\setup-nexus-env.bat
+
+# Linux/Mac
+source scripts/setup-nexus-env.sh
+
+# Luego deployar
+cd backend
+mvn deploy -DskipTests
+```
+
+**Documentación**: [Solución Completa](Documentacion/NEXUS_REAL_SOLUTION.md)
 
 ## License
 
