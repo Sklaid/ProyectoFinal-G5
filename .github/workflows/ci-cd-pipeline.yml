@@ -769,8 +769,8 @@ jobs:
           echo "🔐 Configuring Nexus..."
           
           # Wait for Nexus to fully initialize
-          echo "⏳ Waiting for Nexus to complete initialization (60 seconds)..."
-          sleep 60
+          echo "⏳ Waiting for Nexus to complete initialization (90 seconds)..."
+          sleep 90
           
           # Get the container ID for the Nexus service
           CONTAINER_ID=$(docker ps -q -f "ancestor=sonatype/nexus3:latest" | head -n 1)
@@ -787,41 +787,72 @@ jobs:
           echo "🔍 Checking for admin password file..."
           if docker exec $CONTAINER_ID test -f /nexus-data/admin.password; then
             ADMIN_PASSWORD=$(docker exec $CONTAINER_ID cat /nexus-data/admin.password)
-            echo "✅ Retrieved initial admin password from container"
-            echo "password=$ADMIN_PASSWORD" >> $GITHUB_OUTPUT
+            echo "✅ Retrieved initial admin password: ${ADMIN_PASSWORD:0:4}..."
             
-            # Complete the setup wizard by changing password to admin123
-            echo "🔧 Completing Nexus setup wizard..."
-            
-            # Change password from random to admin123
-            curl -X PUT "http://localhost:8081/service/rest/v1/security/users/admin/change-password" \
-              -u "admin:$ADMIN_PASSWORD" \
-              -H "Content-Type: text/plain" \
-              -d "admin123"
-            
-            # Disable anonymous access
-            curl -X PUT "http://localhost:8081/service/rest/v1/security/anonymous" \
-              -u "admin:admin123" \
-              -H "Content-Type: application/json" \
-              -d '{"enabled":false,"userId":"anonymous","realmName":"NexusAuthorizingRealm"}'
-            
-            echo "✅ Nexus setup completed, password changed to admin123"
-            echo "password=admin123" >> $GITHUB_OUTPUT
+            # Test with initial password first
+            echo "🔍 Testing initial password..."
+            if curl -u "admin:$ADMIN_PASSWORD" -f http://localhost:8081/service/rest/v1/status 2>/dev/null; then
+              echo "✅ Initial password works!"
+              
+              # Complete the setup wizard by changing password to admin123
+              echo "🔧 Changing password to admin123..."
+              
+              CHANGE_RESULT=$(curl -X PUT "http://localhost:8081/service/rest/v1/security/users/admin/change-password" \
+                -u "admin:$ADMIN_PASSWORD" \
+                -H "Content-Type: text/plain" \
+                -d "admin123" \
+                -w "%{http_code}" \
+                -o /dev/null \
+                -s)
+              
+              if [ "$CHANGE_RESULT" = "204" ] || [ "$CHANGE_RESULT" = "200" ]; then
+                echo "✅ Password changed successfully (HTTP $CHANGE_RESULT)"
+                
+                # Wait a moment for the change to take effect
+                sleep 5
+                
+                # Verify new password works
+                if curl -u "admin:admin123" -f http://localhost:8081/service/rest/v1/status 2>/dev/null; then
+                  echo "✅ New password verified!"
+                  
+                  # Disable anonymous access
+                  curl -X PUT "http://localhost:8081/service/rest/v1/security/anonymous" \
+                    -u "admin:admin123" \
+                    -H "Content-Type: application/json" \
+                    -d '{"enabled":false,"userId":"anonymous","realmName":"NexusAuthorizingRealm"}' \
+                    -s
+                  
+                  echo "✅ Nexus setup completed"
+                else
+                  echo "❌ New password doesn't work, keeping initial password"
+                  echo "password=$ADMIN_PASSWORD" >> $GITHUB_OUTPUT
+                  exit 0
+                fi
+              else
+                echo "⚠️ Password change returned HTTP $CHANGE_RESULT, using initial password"
+                echo "password=$ADMIN_PASSWORD" >> $GITHUB_OUTPUT
+                exit 0
+              fi
+            else
+              echo "❌ Initial password doesn't work"
+              docker logs $CONTAINER_ID --tail 30
+              exit 1
+            fi
           else
-            echo "⚠️ No admin.password file found, Nexus may already be configured"
-            echo "password=admin123" >> $GITHUB_OUTPUT
+            echo "⚠️ No admin.password file found"
+            echo "Trying default password admin123..."
+            
+            if curl -u "admin:admin123" -f http://localhost:8081/service/rest/v1/status 2>/dev/null; then
+              echo "✅ Default password works!"
+            else
+              echo "❌ Cannot authenticate with Nexus"
+              docker logs $CONTAINER_ID --tail 30
+              exit 1
+            fi
           fi
           
-          # Test authentication
-          echo "🔍 Testing Nexus authentication..."
-          if curl -u "admin:admin123" -f http://localhost:8081/service/rest/v1/status; then
-            echo "✅ Authentication successful!"
-          else
-            echo "❌ Authentication failed"
-            echo "Checking Nexus logs..."
-            docker logs $CONTAINER_ID --tail 50
-            exit 1
-          fi
+          echo "password=admin123" >> $GITHUB_OUTPUT
+          echo "✅ Nexus is ready with password: admin123"
       
       - name: Setup Nexus repositories
         run: |
@@ -923,16 +954,22 @@ jobs:
           echo "Version: ${{ steps.version.outputs.version }}"
           echo "Type: ${{ steps.version.outputs.artifact_type }}"
           
-          # Use localhost Nexus running as service
-          if [ "${{ steps.version.outputs.artifact_type }}" == "RELEASE" ]; then
-            REPO="maven-releases"
+          # Test authentication before deploying
+          echo "🔍 Testing Nexus authentication..."
+          if curl -u "admin:admin123" -f http://localhost:8081/service/rest/v1/status; then
+            echo "✅ Authentication successful"
           else
-            REPO="maven-snapshots"
+            echo "❌ Authentication failed"
+            exit 1
           fi
           
+          # Deploy using pom.xml distributionManagement configuration
+          echo "🚀 Deploying to Nexus..."
           mvn deploy -DskipTests \
-            -Dmaven.install.skip=true \
-            -DaltDeploymentRepository=nexus::default::http://localhost:8081/repository/$REPO
+            -Dnexus.url=http://localhost:8081 \
+            -Dnexus.releases.repo=maven-releases \
+            -Dnexus.snapshots.repo=maven-snapshots \
+            -X
         working-directory: ./backend
       
       - name: Tag artifact
