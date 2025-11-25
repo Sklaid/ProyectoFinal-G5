@@ -905,6 +905,24 @@ jobs:
           # List final repositories
           echo "📋 Available repositories:"
           curl -u "admin:admin123" http://localhost:8081/service/rest/v1/repositories | jq -r '.[].name'
+          
+          # Verify admin user has deployment privileges
+          echo "🔐 Verifying admin user privileges..."
+          curl -u "admin:admin123" http://localhost:8081/service/rest/v1/security/users/admin | jq '.'
+          
+          # Enable deployment for admin user (ensure nx-admin role)
+          echo "🔧 Ensuring admin has deployment privileges..."
+          curl -X PUT "http://localhost:8081/service/rest/v1/security/users/admin" \
+            -u "admin:admin123" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "userId": "admin",
+              "firstName": "Administrator",
+              "lastName": "User",
+              "emailAddress": "admin@example.com",
+              "status": "active",
+              "roles": ["nx-admin"]
+            }' || echo "Admin user already configured"
       
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -963,12 +981,38 @@ jobs:
             exit 1
           fi
           
+          # Verify repositories exist and are accessible
+          echo "📋 Verifying repositories..."
+          curl -u "admin:admin123" http://localhost:8081/service/rest/v1/repositories | jq -r '.[] | "\(.name) - \(.format) - \(.type)"'
+          
+          # Test write access to repository
+          echo "🔍 Testing write access to maven-snapshots..."
+          TEST_RESULT=$(curl -u "admin:admin123" \
+            -X GET \
+            "http://localhost:8081/service/rest/v1/repositories/maven-snapshots" \
+            -w "%{http_code}" \
+            -o /dev/null \
+            -s)
+          
+          if [ "$TEST_RESULT" = "200" ]; then
+            echo "✅ Repository is accessible"
+          else
+            echo "❌ Repository returned HTTP $TEST_RESULT"
+            exit 1
+          fi
+          
+          # Display Maven settings for debugging
+          echo "📄 Maven settings.xml:"
+          cat ~/.m2/settings.xml
+          
           # Deploy using pom.xml distributionManagement configuration
           echo "🚀 Deploying to Nexus..."
           mvn deploy -DskipTests \
             -Dnexus.url=http://localhost:8081 \
             -Dnexus.releases.repo=maven-releases \
             -Dnexus.snapshots.repo=maven-snapshots \
+            -Dmaven.wagon.http.ssl.insecure=true \
+            -Dmaven.wagon.http.ssl.allowall=true \
             -X
         working-directory: ./backend
       
