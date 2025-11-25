@@ -2250,7 +2250,7 @@ jobs:
                     },
                     {
                       "title": "Commit",
-                      "value": "<${{ github.event.head_commit.url }}|${{ github.sha }}>",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>",
                       "short": true
                     },
                     {
@@ -2270,8 +2270,7 @@ jobs:
                     }
                   ],
                   "footer": "GitHub Actions",
-                  "footer_icon": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
-                  "ts": ${{ github.event.head_commit.timestamp }}
+                  "footer_icon": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
                 }
               ]
             }
@@ -2302,7 +2301,7 @@ jobs:
                     },
                     {
                       "title": "Commit",
-                      "value": "<${{ github.event.head_commit.url }}|${{ github.sha }}>",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>",
                       "short": true
                     },
                     {
@@ -2327,8 +2326,7 @@ jobs:
                     }
                   ],
                   "footer": "GitHub Actions",
-                  "footer_icon": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
-                  "ts": ${{ github.event.head_commit.timestamp }}
+                  "footer_icon": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
                 }
               ]
             }
