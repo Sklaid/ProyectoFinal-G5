@@ -860,12 +860,34 @@ jobs:
           
           # Accept EULA (required for Nexus 3.86+)
           echo "📜 Accepting Nexus EULA..."
-          curl -X POST "http://localhost:8081/service/rest/v1/system/eula/accept" \
-            -u "admin:admin123" \
-            -H "Content-Type: application/json" \
-            -d '{"accepted": true}' || echo "EULA already accepted or not required"
           
-          echo "✅ EULA accepted"
+          # First check EULA status
+          echo "Checking EULA status..."
+          curl -s -u "admin:admin123" http://localhost:8081/service/rest/v1/system/eula | jq '.'
+          
+          # Accept EULA
+          echo "Accepting EULA..."
+          EULA_RESULT=$(curl -s -w "\n%{http_code}" -X POST "http://localhost:8081/service/rest/v1/system/eula/accept" \
+            -u "admin:admin123" \
+            -H "Content-Type: application/json")
+          
+          HTTP_CODE=$(echo "$EULA_RESULT" | tail -n1)
+          RESPONSE=$(echo "$EULA_RESULT" | head -n-1)
+          
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response: $RESPONSE"
+          
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "204" ]; then
+            echo "✅ EULA accepted successfully"
+          else
+            echo "⚠️ EULA acceptance returned HTTP $HTTP_CODE"
+            echo "This might be okay if EULA was already accepted"
+          fi
+          
+          # Verify EULA status after acceptance
+          echo "Verifying EULA status..."
+          curl -s -u "admin:admin123" http://localhost:8081/service/rest/v1/system/eula | jq '.'
+          
           echo ""
           
           # Check if repositories already exist
