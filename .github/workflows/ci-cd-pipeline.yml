@@ -740,6 +740,8 @@ jobs:
           --health-interval 30s
           --health-timeout 10s
           --health-retries 20
+        env:
+          INSTALL4J_ADD_VM_PARAMS: "-Xms512m -Xmx512m -XX:MaxDirectMemorySize=512m"
     
     steps:
       - name: Checkout code
@@ -761,31 +763,78 @@ jobs:
             sleep 10
           done
       
-      - name: Get Nexus admin password
+      - name: Configure Nexus
         id: nexus-password
         run: |
-          # Wait a bit more for Nexus to fully initialize
-          sleep 30
+          echo "🔐 Configuring Nexus..."
           
-          # Try to get the initial admin password from container
-          CONTAINER_ID=$(docker ps -q -f ancestor=sonatype/nexus3:latest)
-          if [ -n "$CONTAINER_ID" ]; then
-            ADMIN_PASSWORD=$(docker exec $CONTAINER_ID cat /nexus-data/admin.password 2>/dev/null || echo "admin123")
+          # Wait for Nexus to fully initialize
+          echo "⏳ Waiting for Nexus to complete initialization (60 seconds)..."
+          sleep 60
+          
+          # Get the container ID for the Nexus service
+          CONTAINER_ID=$(docker ps -q -f "ancestor=sonatype/nexus3:latest" | head -n 1)
+          
+          if [ -z "$CONTAINER_ID" ]; then
+            echo "❌ Could not find Nexus container"
+            docker ps -a
+            exit 1
+          fi
+          
+          echo "📦 Found Nexus container: $CONTAINER_ID"
+          
+          # Check if admin.password file exists
+          echo "🔍 Checking for admin password file..."
+          if docker exec $CONTAINER_ID test -f /nexus-data/admin.password; then
+            ADMIN_PASSWORD=$(docker exec $CONTAINER_ID cat /nexus-data/admin.password)
+            echo "✅ Retrieved initial admin password from container"
             echo "password=$ADMIN_PASSWORD" >> $GITHUB_OUTPUT
-            echo "Using admin password from container"
-          else
+            
+            # Complete the setup wizard by changing password to admin123
+            echo "🔧 Completing Nexus setup wizard..."
+            
+            # Change password from random to admin123
+            curl -X PUT "http://localhost:8081/service/rest/v1/security/users/admin/change-password" \
+              -u "admin:$ADMIN_PASSWORD" \
+              -H "Content-Type: text/plain" \
+              -d "admin123"
+            
+            # Disable anonymous access
+            curl -X PUT "http://localhost:8081/service/rest/v1/security/anonymous" \
+              -u "admin:admin123" \
+              -H "Content-Type: application/json" \
+              -d '{"enabled":false,"userId":"anonymous","realmName":"NexusAuthorizingRealm"}'
+            
+            echo "✅ Nexus setup completed, password changed to admin123"
             echo "password=admin123" >> $GITHUB_OUTPUT
-            echo "Using default password"
+          else
+            echo "⚠️ No admin.password file found, Nexus may already be configured"
+            echo "password=admin123" >> $GITHUB_OUTPUT
+          fi
+          
+          # Test authentication
+          echo "🔍 Testing Nexus authentication..."
+          if curl -u "admin:admin123" -f http://localhost:8081/service/rest/v1/status; then
+            echo "✅ Authentication successful!"
+          else
+            echo "❌ Authentication failed"
+            echo "Checking Nexus logs..."
+            docker logs $CONTAINER_ID --tail 50
+            exit 1
           fi
       
       - name: Setup Nexus repositories
         run: |
           echo "🔧 Setting up Nexus repositories..."
-          NEXUS_PASSWORD="${{ steps.nexus-password.outputs.password }}"
           
-          # Create maven-releases repository
+          # Check if repositories already exist
+          echo "📋 Checking existing repositories..."
+          curl -u "admin:admin123" http://localhost:8081/service/rest/v1/repositories | jq -r '.[].name' || true
+          
+          # Create maven-releases repository (ignore if exists)
+          echo "Creating maven-releases repository..."
           curl -X POST "http://localhost:8081/service/rest/v1/repositories/maven/hosted" \
-            -u "admin:$NEXUS_PASSWORD" \
+            -u "admin:admin123" \
             -H "Content-Type: application/json" \
             -d '{
               "name": "maven-releases",
@@ -799,11 +848,12 @@ jobs:
                 "versionPolicy": "RELEASE",
                 "layoutPolicy": "STRICT"
               }
-            }' || echo "Repository may already exist"
+            }' 2>&1 | grep -v "already exists" || echo "✓ maven-releases ready"
           
-          # Create maven-snapshots repository
+          # Create maven-snapshots repository (ignore if exists)
+          echo "Creating maven-snapshots repository..."
           curl -X POST "http://localhost:8081/service/rest/v1/repositories/maven/hosted" \
-            -u "admin:$NEXUS_PASSWORD" \
+            -u "admin:admin123" \
             -H "Content-Type: application/json" \
             -d '{
               "name": "maven-snapshots",
@@ -817,9 +867,13 @@ jobs:
                 "versionPolicy": "SNAPSHOT",
                 "layoutPolicy": "STRICT"
               }
-            }' || echo "Repository may already exist"
+            }' 2>&1 | grep -v "already exists" || echo "✓ maven-snapshots ready"
           
           echo "✅ Nexus repositories configured"
+          
+          # List final repositories
+          echo "📋 Available repositories:"
+          curl -u "admin:admin123" http://localhost:8081/service/rest/v1/repositories | jq -r '.[].name'
       
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -831,22 +885,23 @@ jobs:
       - name: Configure Maven settings
         run: |
           mkdir -p ~/.m2
-          cat > ~/.m2/settings.xml << EOF
+          cat > ~/.m2/settings.xml << 'EOF'
           <settings>
             <servers>
               <server>
                 <id>nexus-snapshots</id>
                 <username>admin</username>
-                <password>${{ steps.nexus-password.outputs.password }}</password>
+                <password>admin123</password>
               </server>
               <server>
                 <id>nexus-releases</id>
                 <username>admin</username>
-                <password>${{ steps.nexus-password.outputs.password }}</password>
+                <password>admin123</password>
               </server>
             </servers>
           </settings>
           EOF
+          echo "✅ Maven settings configured with Nexus credentials"
       
       - name: Determine version
         id: version
