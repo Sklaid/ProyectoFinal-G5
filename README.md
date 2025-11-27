@@ -82,17 +82,12 @@ scripts\start-dev.bat
 scripts\stop-dev.bat
 ```
 
-**Linux/Mac/Git Bash:**
-```bash
-./scripts/start-dev.sh
-./scripts/stop-dev.sh
-```
-
 ### 4. Access the application
 
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8080
 - SonarQube: http://localhost:9000
+- SonarCloud: https://sonarcloud.io/project/overview
 - Nexus: http://localhost:8081
 
 ## Development Workflow
@@ -189,8 +184,7 @@ cd backend && mvn deploy -DskipTests
 3. Merge PR → Pipeline ejecuta Canary → Production → Tag GOLD
 
 **Documentación**:
-- [Branch Protection Setup](Documentacion/BRANCH_PROTECTION_SETUP.md)
-- [Pull Request Workflow](Documentacion/PULL_REQUEST_WORKFLOW.md)
+- [Security Vulnerabilities](Documentacion/SECURITY_VULNERABILITIES.md) - Vulnerabilidades detectadas
 
 ## License
 
