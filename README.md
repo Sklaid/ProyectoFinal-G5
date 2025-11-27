@@ -1,8 +1,12 @@
 # DevOps Enterprise Platform - TechCorp Solutions
 
+[![CI/CD Pipeline](https://github.com/Sklaid/ProyectoFinal-G5/actions/workflows/ci-cd-pipeline.yml/badge.svg)](https://github.com/Sklaid/ProyectoFinal-G5/actions/workflows/ci-cd-pipeline.yml)
+
 ## Overview
 
 This project implements a complete DevOps enterprise platform for TechCorp Solutions, demonstrating the transformation from traditional software development to a modern DevOps culture. The platform includes a full-stack web application with automated CI/CD pipeline, containerized infrastructure, and comprehensive testing at all levels.
+
+**Latest Release**: v1.0.0-STABLE | **Status**: Production Ready ✅
 
 ## Project Structure
 
@@ -89,6 +93,7 @@ scripts\stop-dev.bat
 - SonarQube: http://localhost:9000
 - SonarCloud: https://sonarcloud.io/project/overview
 - Nexus: http://localhost:8081
+- PostgresSQL: extension -> PostgreSQL -> Connect to database -> postgresql://postgres:postgres@localhost:5432/devops
 
 ## Development Workflow
 
