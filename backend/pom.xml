@@ -8,7 +8,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.0</version>
+        <version>3.2.5</version>
         <relativePath/>
     </parent>
 
@@ -23,6 +23,9 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        
+        <!-- Dependency Versions (override Spring Boot defaults for security patches) -->
+        <postgresql.version>42.7.3</postgresql.version>
         
         <!-- SonarQube Properties -->
         <sonar.projectKey>devops-enterprise-platform</sonar.projectKey>

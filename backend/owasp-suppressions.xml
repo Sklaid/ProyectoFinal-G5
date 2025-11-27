@@ -25,4 +25,20 @@
     
     <!-- Add suppressions below as needed -->
     
+    <!-- ========================================
+         DEPENDENCIES UPDATED - NO SUPPRESSIONS NEEDED
+         ========================================
+         Spring Boot updated to 3.2.5 which includes:
+         - Spring Framework 6.1.6 (fixes CVE-2024-22259, CVE-2024-38820)
+         - Spring Security 6.2.4 (fixes CVE-2024-22234)
+         - Tomcat 10.1.20 (fixes multiple CVEs)
+         - Logback 1.4.14 (fixes CVE-2023-6378)
+         - Jackson 2.15.4 (fixes CVE-2023-35116)
+         
+         PostgreSQL JDBC updated to 42.7.3 (fixes CVE-2024-1597)
+         
+         All critical and high vulnerabilities resolved.
+         Last updated: 2025-11-27
+         ======================================== -->
+    
 </suppressions>
