@@ -46,6 +46,12 @@ public class AuthenticationPropertiesTest {
     @Autowired
     private MockMvc mockMvc;
     
+    @org.junit.jupiter.api.BeforeEach
+    public void cleanupDatabase() {
+        userRepository.deleteAll();
+        userRepository.flush(); // Force immediate deletion
+    }
+    
     /**
      * Feature: devops-enterprise-platform, Property 1: Valid credentials authenticate successfully
      */
@@ -134,7 +140,8 @@ public class AuthenticationPropertiesTest {
         
         // Cleanup before test to avoid unique constraint violations
         userRepository.deleteAll();
-        userRepository.flush(); // Force immediate deletion
+        
+userRepository.flush(); // Force immediate deletion
         try {
             // Arrange: Create user with valid credentials
             User user = User.builder()
@@ -266,7 +273,8 @@ public class AuthenticationPropertiesTest {
         
         // Cleanup before test to avoid unique constraint violations
         userRepository.deleteAll();
-        userRepository.flush(); // Force immediate deletion
+        
+userRepository.flush(); // Force immediate deletion
         try {
             // Arrange: Create user and login to get a valid token
             User user = User.builder()
@@ -314,7 +322,8 @@ public class AuthenticationPropertiesTest {
         
         // Cleanup before test to avoid unique constraint violations
         userRepository.deleteAll();
-        userRepository.flush(); // Force immediate deletion
+        
+userRepository.flush(); // Force immediate deletion
         try {
             // Arrange: Create user with plaintext password
             String plaintextPassword = credentials.getPassword();
