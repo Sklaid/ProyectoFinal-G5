@@ -386,7 +386,7 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: [build-backend, build-frontend]
-    if: false  # TEMPORARILY DISABLED - Takes ~27 minutes, enable when ready for production
+    if: ${{ !inputs.skip_tests }}
     
     steps:
       - name: Checkout code
@@ -458,7 +458,7 @@ jobs:
   deploy-preprod:
     name: Deploy to Pre-Production
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis]
+    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan]
     if: |
       success() &&
       (github.ref == 'refs/heads/develop' || 
@@ -560,7 +560,7 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis]
+    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan]
     if: ${{ !inputs.skip_tests }}
     
     services:
