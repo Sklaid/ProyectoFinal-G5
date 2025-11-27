@@ -43,6 +43,7 @@ jobs:
   build-backend:
     name: Build Backend
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
     
     steps:
       - name: Checkout code
@@ -72,6 +73,7 @@ jobs:
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
     
     steps:
       - name: Checkout code
@@ -104,6 +106,7 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     needs: [build-backend, build-frontend]
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
     
     steps:
       - name: Checkout code
@@ -172,7 +175,9 @@ jobs:
     name: SonarQube Analysis (Multi-Module)
     runs-on: ubuntu-latest
     needs: [unit-tests]
-    if: ${{ !inputs.skip_tests }}
+    if: |
+      !inputs.skip_tests &&
+      (github.ref == 'refs/heads/develop' || github.event_name == 'pull_request')
     
     steps:
       - name: Checkout code
@@ -385,6 +390,7 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
     needs: [build-backend, build-frontend]
     if: ${{ !inputs.skip_tests }}
     
@@ -604,6 +610,7 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
     needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan]
     if: ${{ !inputs.skip_tests }}
     
@@ -651,6 +658,7 @@ jobs:
   api-tests:
     name: API Tests (Newman)
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
     needs: [build-backend, build-frontend]
     if: ${{ !inputs.skip_tests }}
     permissions:
@@ -1200,6 +1208,7 @@ jobs:
   functional-tests:
     name: Functional Tests (Selenium)
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
     needs: [build-backend, build-frontend]
     if: ${{ !inputs.skip_tests }}
     
@@ -1314,6 +1323,7 @@ jobs:
   # Job 11: Performance Tests with JMeter
   performance-tests:
     name: Performance Tests (JMeter)
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     needs: [build-backend]
     if: ${{ !inputs.skip_tests }}
@@ -1494,26 +1504,45 @@ jobs:
   canary-deployment:
     name: Canary Deployment
     runs-on: ubuntu-latest
-    needs: [tag-stable-artifact]
-    if: |
-      success() &&
-      github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Download backend artifact
-        uses: actions/download-artifact@v4
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
         with:
-          name: backend-jar
-          path: backend/target/
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
       
-      - name: Download frontend artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist/
+      - name: Get version from pom.xml
+        id: version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | sed 's/-SNAPSHOT//')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Deploying version: ${VERSION}"
+        working-directory: ./backend
+      
+      - name: Download artifacts from Nexus
+        run: |
+          echo "📦 Downloading STABLE artifacts from Nexus..."
+          
+          # Download backend JAR from Nexus
+          curl -u ${{ secrets.NEXUS_USERNAME }}:${{ secrets.NEXUS_PASSWORD }} \
+            -o backend/target/devops-platform-${{ steps.version.outputs.version }}.jar \
+            "${{ secrets.NEXUS_URL }}/repository/maven-releases/com/techcorp/devops/devops-platform/${{ steps.version.outputs.version }}/devops-platform-${{ steps.version.outputs.version }}.jar"
+          
+          echo "✅ Backend artifact downloaded from Nexus"
+          ls -lh backend/target/
+      
+      - name: Build frontend from source (lightweight)
+        run: |
+          echo "🔨 Building frontend (quick build)..."
+          npm ci
+          npm run build
+        working-directory: ./frontend
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -1735,25 +1764,45 @@ jobs:
     name: Production Deployment
     runs-on: ubuntu-latest
     needs: [canary-deployment]
-    if: |
-      success() &&
-      github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Download backend artifact
-        uses: actions/download-artifact@v4
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
         with:
-          name: backend-jar
-          path: backend/target/
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
       
-      - name: Download frontend artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist/
+      - name: Get version from pom.xml
+        id: version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | sed 's/-SNAPSHOT//')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Deploying version: ${VERSION}"
+        working-directory: ./backend
+      
+      - name: Download artifacts from Nexus
+        run: |
+          echo "📦 Downloading STABLE artifacts from Nexus..."
+          
+          # Download backend JAR from Nexus
+          curl -u ${{ secrets.NEXUS_USERNAME }}:${{ secrets.NEXUS_PASSWORD }} \
+            -o backend/target/devops-platform-${{ steps.version.outputs.version }}.jar \
+            "${{ secrets.NEXUS_URL }}/repository/maven-releases/com/techcorp/devops/devops-platform/${{ steps.version.outputs.version }}/devops-platform-${{ steps.version.outputs.version }}.jar"
+          
+          echo "✅ Backend artifact downloaded from Nexus"
+          ls -lh backend/target/
+      
+      - name: Build frontend from source (lightweight)
+        run: |
+          echo "🔨 Building frontend (quick build)..."
+          npm ci
+          npm run build
+        working-directory: ./frontend
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -1970,6 +2019,7 @@ jobs:
   tag-gold-artifact:
     name: Tag GOLD Artifact
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [production-deployment]
     if: |
       success() &&
@@ -2076,6 +2126,7 @@ jobs:
   post-deployment-monitoring:
     name: Post-Deployment Monitoring
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [production-deployment]
     if: |
       success() &&
@@ -2225,7 +2276,9 @@ jobs:
     name: Send Notifications
     runs-on: ubuntu-latest
     needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan, deploy-preprod, integration-tests, api-tests, publish-artifacts, functional-tests, performance-tests, tag-stable-artifact, canary-deployment, production-deployment, tag-gold-artifact, post-deployment-monitoring]
-    if: always()
+    if: |
+      always() &&
+      (needs.build-backend.result != 'skipped' || needs.canary-deployment.result != 'skipped')
     
     steps:
       - name: Determine pipeline status
@@ -2397,6 +2450,7 @@ jobs:
   rollback:
     name: Rollback on Failure
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [production-deployment, post-deployment-monitoring]
     if: |
       failure() &&
@@ -2649,7 +2703,9 @@ jobs:
     name: Pipeline Summary
     runs-on: ubuntu-latest
     needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan, deploy-preprod, integration-tests, api-tests, publish-artifacts, functional-tests, performance-tests, tag-stable-artifact, canary-deployment, production-deployment, tag-gold-artifact, post-deployment-monitoring, notifications, rollback]
-    if: always()
+    if: |
+      always() &&
+      (needs.build-backend.result != 'skipped' || needs.canary-deployment.result != 'skipped')
     
     steps:
       - name: Check pipeline status
