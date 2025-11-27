@@ -1,0 +1,6 @@
+projectKey=devops-enterprise-platform-frontend
+serverUrl=http://localhost:9000
+serverVersion=25.11.0.114957
+dashboardUrl=http://localhost:9000/dashboard?id=devops-enterprise-platform-frontend
+ceTaskId=9309d823-b4b9-431d-b4e1-57fcd89fb4c4
+ceTaskUrl=http://localhost:9000/api/ce/task?id=9309d823-b4b9-431d-b4e1-57fcd89fb4c4

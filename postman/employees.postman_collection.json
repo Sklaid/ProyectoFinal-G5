@@ -1,0 +1,661 @@
+{
+	"info": {
+		"_postman_id": "employees-collection-001",
+		"name": "DevOps Platform - Employees API",
+		"description": "Collection for testing employee CRUD endpoints of the DevOps Enterprise Platform",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Get All Employees",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Test status code",
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"// Test response time",
+							"pm.test(\"Response time is less than 2000ms\", function () {",
+							"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+							"});",
+							"",
+							"// Test response is an array",
+							"pm.test(\"Response is an array\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.be.an('array');",
+							"});",
+							"",
+							"// Test employee structure if array is not empty",
+							"pm.test(\"Employee objects have required fields\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    if (jsonData.length > 0) {",
+							"        var employee = jsonData[0];",
+							"        pm.expect(employee).to.have.property('id');",
+							"        pm.expect(employee).to.have.property('firstName');",
+							"        pm.expect(employee).to.have.property('lastName');",
+							"        pm.expect(employee).to.have.property('email');",
+							"        pm.expect(employee).to.have.property('gender');",
+							"        pm.expect(employee).to.have.property('department');",
+							"        pm.expect(employee).to.have.property('level');",
+							"        pm.expect(employee).to.have.property('hireDate');",
+							"    }",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/employees",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"employees"
+					]
+				},
+				"description": "Get all employees. Requires authentication."
+			},
+			"response": []
+		},
+		{
+			"name": "Create Employee with Valid Data",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// Generate unique email to avoid conflicts in CI/CD",
+							"const timestamp = Date.now();",
+							"const uniqueEmail = `john.doe.${timestamp}@techcorp.com`;",
+							"pm.environment.set(\"unique_email\", uniqueEmail);"
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Test status code",
+							"pm.test(\"Status code is 201 Created\", function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"// Test response time",
+							"pm.test(\"Response time is less than 2000ms\", function () {",
+							"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+							"});",
+							"",
+							"// Test response structure",
+							"pm.test(\"Response has employee structure\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('id');",
+							"    pm.expect(jsonData).to.have.property('firstName');",
+							"    pm.expect(jsonData).to.have.property('lastName');",
+							"    pm.expect(jsonData).to.have.property('email');",
+							"    pm.expect(jsonData).to.have.property('gender');",
+							"    pm.expect(jsonData).to.have.property('department');",
+							"    pm.expect(jsonData).to.have.property('level');",
+							"    pm.expect(jsonData).to.have.property('hireDate');",
+							"    pm.expect(jsonData).to.have.property('createdAt');",
+							"});",
+							"",
+							"// Test data matches request",
+							"pm.test(\"Response data matches request\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    var requestData = JSON.parse(pm.request.body.raw);",
+							"    pm.expect(jsonData.firstName).to.equal(requestData.firstName);",
+							"    pm.expect(jsonData.lastName).to.equal(requestData.lastName);",
+							"    pm.expect(jsonData.email).to.equal(requestData.email);",
+							"    pm.expect(jsonData.gender).to.equal(requestData.gender);",
+							"    pm.expect(jsonData.department).to.equal(requestData.department);",
+							"    pm.expect(jsonData.level).to.equal(requestData.level);",
+							"});",
+							"",
+							"// Save employee ID for subsequent tests",
+							"pm.test(\"Save employee ID\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.environment.set(\"employee_id\", jsonData.id);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"firstName\": \"John\",\n    \"lastName\": \"Doe\",\n    \"email\": \"{{unique_email}}\",\n    \"phone\": \"+1234567890\",\n    \"gender\": \"MALE\",\n    \"department\": \"IT\",\n    \"level\": \"SENIOR\",\n    \"skills\": [\"Java\", \"Spring Boot\", \"Docker\"],\n    \"hireDate\": \"2024-01-15\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/employees",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"employees"
+					]
+				},
+				"description": "Create a new employee with valid data. Requires ADMIN role."
+			},
+			"response": []
+		},
+		{
+			"name": "Create Employee with Invalid Email",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Test status code",
+							"pm.test(\"Status code is 400 Bad Request\", function () {",
+							"    pm.response.to.have.status(400);",
+							"});",
+							"",
+							"// Test response time",
+							"pm.test(\"Response time is less than 2000ms\", function () {",
+							"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+							"});",
+							"",
+							"// Test error response structure",
+							"pm.test(\"Response has error structure\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('code');",
+							"    pm.expect(jsonData).to.have.property('message');",
+							"});",
+							"",
+							"// Test validation error code",
+							"pm.test(\"Error code indicates validation error\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.code).to.be.oneOf(['VALIDATION_ERROR', 'BAD_REQUEST']);",
+							"});",
+							"",
+							"// Test error message mentions email",
+							"pm.test(\"Error message mentions email validation\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    var errorText = JSON.stringify(jsonData).toLowerCase();",
+							"    pm.expect(errorText).to.include('email');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"firstName\": \"Jane\",\n    \"lastName\": \"Smith\",\n    \"email\": \"invalid-email-format\",\n    \"phone\": \"+1234567890\",\n    \"gender\": \"FEMALE\",\n    \"department\": \"HR\",\n    \"level\": \"MID\",\n    \"skills\": [\"Recruitment\"],\n    \"hireDate\": \"2024-01-15\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/employees",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"employees"
+					]
+				},
+				"description": "Attempt to create employee with invalid email format. Should return 400 with validation error."
+			},
+			"response": []
+		},
+		{
+			"name": "Create Employee with Missing Required Fields",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Test status code",
+							"pm.test(\"Status code is 400 Bad Request\", function () {",
+							"    pm.response.to.have.status(400);",
+							"});",
+							"",
+							"// Test response time",
+							"pm.test(\"Response time is less than 2000ms\", function () {",
+							"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+							"});",
+							"",
+							"// Test error response structure",
+							"pm.test(\"Response has error structure\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('code');",
+							"    pm.expect(jsonData).to.have.property('message');",
+							"});",
+							"",
+							"// Test validation error code",
+							"pm.test(\"Error code indicates validation error\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.code).to.be.oneOf(['VALIDATION_ERROR', 'BAD_REQUEST']);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"firstName\": \"Bob\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/employees",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"employees"
+					]
+				},
+				"description": "Attempt to create employee with missing required fields. Should return 400 with validation errors."
+			},
+			"response": []
+		},
+		{
+			"name": "Get Employee by ID",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Test status code",
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"// Test response time",
+							"pm.test(\"Response time is less than 2000ms\", function () {",
+							"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+							"});",
+							"",
+							"// Test response structure",
+							"pm.test(\"Response has employee structure\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('id');",
+							"    pm.expect(jsonData).to.have.property('firstName');",
+							"    pm.expect(jsonData).to.have.property('lastName');",
+							"    pm.expect(jsonData).to.have.property('email');",
+							"    pm.expect(jsonData).to.have.property('gender');",
+							"    pm.expect(jsonData).to.have.property('department');",
+							"    pm.expect(jsonData).to.have.property('level');",
+							"});",
+							"",
+							"// Test ID matches requested ID",
+							"pm.test(\"Employee ID matches requested ID\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    var requestedId = pm.environment.get(\"employee_id\");",
+							"    pm.expect(jsonData.id.toString()).to.equal(requestedId.toString());",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/employees/{{employee_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"employees",
+						"{{employee_id}}"
+					]
+				},
+				"description": "Get employee by ID. Requires authentication."
+			},
+			"response": []
+		},
+		{
+			"name": "Update Employee with Valid Data",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Test status code",
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"// Test response time",
+							"pm.test(\"Response time is less than 2000ms\", function () {",
+							"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+							"});",
+							"",
+							"// Test response structure",
+							"pm.test(\"Response has employee structure\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('id');",
+							"    pm.expect(jsonData).to.have.property('firstName');",
+							"    pm.expect(jsonData).to.have.property('lastName');",
+							"    pm.expect(jsonData).to.have.property('email');",
+							"    pm.expect(jsonData).to.have.property('updatedAt');",
+							"});",
+							"",
+							"// Test data was updated",
+							"pm.test(\"Employee data was updated\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    var requestData = JSON.parse(pm.request.body.raw);",
+							"    pm.expect(jsonData.firstName).to.equal(requestData.firstName);",
+							"    pm.expect(jsonData.phone).to.equal(requestData.phone);",
+							"});",
+							"",
+							"// Test ID remains the same",
+							"pm.test(\"Employee ID remains unchanged\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    var originalId = pm.environment.get(\"employee_id\");",
+							"    pm.expect(jsonData.id.toString()).to.equal(originalId.toString());",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"firstName\": \"John Updated\",\n    \"lastName\": \"Doe\",\n    \"email\": \"{{unique_email}}\",\n    \"phone\": \"+9876543210\",\n    \"gender\": \"MALE\",\n    \"department\": \"IT\",\n    \"level\": \"LEAD\",\n    \"skills\": [\"Java\", \"Spring Boot\", \"Docker\", \"Kubernetes\"],\n    \"hireDate\": \"2024-01-15\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/employees/{{employee_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"employees",
+						"{{employee_id}}"
+					]
+				},
+				"description": "Update an existing employee with valid data. Requires ADMIN role."
+			},
+			"response": []
+		},
+		{
+			"name": "Update Employee with Invalid Data",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Test status code",
+							"pm.test(\"Status code is 400 Bad Request\", function () {",
+							"    pm.response.to.have.status(400);",
+							"});",
+							"",
+							"// Test response time",
+							"pm.test(\"Response time is less than 2000ms\", function () {",
+							"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+							"});",
+							"",
+							"// Test error response structure",
+							"pm.test(\"Response has error structure\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('code');",
+							"    pm.expect(jsonData).to.have.property('message');",
+							"});",
+							"",
+							"// Test validation error code",
+							"pm.test(\"Error code indicates validation error\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.code).to.be.oneOf(['VALIDATION_ERROR', 'BAD_REQUEST']);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"firstName\": \"\",\n    \"lastName\": \"\",\n    \"email\": \"invalid-email\",\n    \"gender\": \"INVALID_GENDER\",\n    \"department\": \"IT\",\n    \"level\": \"SENIOR\",\n    \"hireDate\": \"2024-01-15\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/employees/{{employee_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"employees",
+						"{{employee_id}}"
+					]
+				},
+				"description": "Attempt to update employee with invalid data. Should return 400 with validation errors."
+			},
+			"response": []
+		},
+		{
+			"name": "Delete Employee",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Test status code",
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"// Test response time",
+							"pm.test(\"Response time is less than 2000ms\", function () {",
+							"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+							"});",
+							"",
+							"// Test response structure",
+							"pm.test(\"Response has message\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('message');",
+							"});",
+							"",
+							"// Test success message",
+							"pm.test(\"Delete message is correct\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.message.toLowerCase()).to.include('delete');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/employees/{{employee_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"employees",
+						"{{employee_id}}"
+					]
+				},
+				"description": "Delete an employee. Requires ADMIN role."
+			},
+			"response": []
+		},
+		{
+			"name": "Get Deleted Employee (Should Fail)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Test status code",
+							"pm.test(\"Status code is 404 Not Found\", function () {",
+							"    pm.response.to.have.status(404);",
+							"});",
+							"",
+							"// Test response time",
+							"pm.test(\"Response time is less than 2000ms\", function () {",
+							"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+							"});",
+							"",
+							"// Test error response structure",
+							"pm.test(\"Response has error structure\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('code');",
+							"    pm.expect(jsonData).to.have.property('message');",
+							"});",
+							"",
+							"// Test error code",
+							"pm.test(\"Error code is NOT_FOUND\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.code).to.equal('NOT_FOUND');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/employees/{{employee_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"employees",
+						"{{employee_id}}"
+					]
+				},
+				"description": "Attempt to get a deleted employee. Should return 404 Not Found."
+			},
+			"response": []
+		},
+		{
+			"name": "Access Without Authentication (Should Fail)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Test status code",
+							"pm.test(\"Status code is 401 Unauthorized\", function () {",
+							"    pm.response.to.have.status(401);",
+							"});",
+							"",
+							"// Test response time",
+							"pm.test(\"Response time is less than 2000ms\", function () {",
+							"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/employees",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"employees"
+					]
+				},
+				"description": "Attempt to access employees endpoint without authentication. Should return 401 Unauthorized."
+			},
+			"response": []
+		}
+	]
+}
