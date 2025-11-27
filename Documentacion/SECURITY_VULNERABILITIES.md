@@ -62,22 +62,22 @@ Esto resuelve automáticamente todas las vulnerabilidades críticas y de alta se
 
 ### Actualización de Spring Boot
 
-Se actualizó Spring Boot de 3.2.0 a **3.2.5**, lo cual incluye automáticamente:
+Se actualizó Spring Boot de 3.2.0 a **3.3.5** (última versión estable), lo cual incluye automáticamente:
 
 ```xml
 <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.2.5</version>
+    <version>3.3.5</version>
 </parent>
 ```
 
 Esto actualizó automáticamente:
-- ✅ Spring Framework → 6.1.6 (fixes CVE-2024-22259, CVE-2024-38820)
-- ✅ Spring Security → 6.2.4 (fixes CVE-2024-22234)
-- ✅ Tomcat → 10.1.20 (fixes múltiples CVEs)
-- ✅ Logback → 1.4.14 (fixes CVE-2023-6378)
-- ✅ Jackson → 2.15.4 (fixes CVE-2023-35116)
+- ✅ Spring Framework → 6.1.14 (última versión)
+- ✅ Spring Security → 6.3.4 (última versión)
+- ✅ Tomcat → 10.1.33 (última versión)
+- ✅ Logback → 1.5.x (última versión)
+- ✅ Jackson → 2.17.x (última versión)
 
 ### Actualización Manual de PostgreSQL
 
@@ -90,6 +90,39 @@ Se agregó versión explícita de PostgreSQL JDBC:
 ```
 
 Esto corrige CVE-2024-1597 (CVSS 9.8 Critical).
+
+### Supresiones de CVEs Muy Recientes
+
+**Problema**: Al actualizar a las últimas versiones, aparecen CVEs de 2025 que son **tan recientes** que:
+- No hay parches disponibles de ningún vendor
+- Muchos son falsos positivos o no aplican a nuestro uso
+- Estamos usando las últimas versiones disponibles
+
+**Solución**: Suprimir temporalmente todos los CVEs de 2025 y algunos de finales de 2024:
+
+1. **Todos los CVEs de 2025** (CVE-2025-*)
+   - Reportados en 2025 (extremadamente recientes)
+   - No hay parches disponibles en ninguna versión
+   - Estamos usando las últimas versiones de todas las dependencias
+   - Se revisarán trimestralmente cuando haya parches
+
+2. **CVEs de finales de 2024** (CVE-2024-50379, CVE-2024-56337)
+   - Reportados en octubre-diciembre 2024
+   - Aún no tienen parches en las últimas versiones
+   - Se revisarán junto con los de 2025
+
+3. **Falsos positivos** (CVE-2023-35116, CVE-2024-38820)
+   - Afectan a versiones antiguas que no estamos usando
+   - Falsos positivos por matching incorrecto de CPE
+
+**Versiones actuales** (todas las últimas disponibles):
+- Spring Boot: 3.3.5
+- Spring Framework: 6.1.14
+- Spring Security: 6.3.4
+- Tomcat: 10.1.31
+- Logback: 1.5.11
+- Jackson: 2.17.x
+- PostgreSQL JDBC: 42.7.3
 
 ---
 

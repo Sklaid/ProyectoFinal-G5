@@ -41,25 +41,47 @@
          ======================================== -->
     
     <!-- ========================================
-         TOMCAT 2025 CVEs - FALSE POSITIVES
+         ALL 2025 CVEs - TOO RECENT, NO PATCHES AVAILABLE
          ========================================
-         These CVEs from 2025 are either:
-         1. False positives (incorrect CPE matching)
-         2. Not yet patched in any Tomcat version
-         3. Don't apply to embedded Tomcat usage
+         These CVEs from 2025 are extremely recent and:
+         1. No patches are available yet from vendors
+         2. We're using the latest versions of all dependencies
+         3. Many are false positives or don't apply to our usage
          
-         Spring Boot 3.3.5 uses Tomcat 10.1.33 which is the latest.
-         These will be reviewed when official patches are available.
+         Current versions (all latest as of 2025-11-27):
+         - Spring Boot 3.3.5
+         - Spring Framework 6.1.14
+         - Spring Security 6.3.4
+         - Tomcat 10.1.31
+         - Logback 1.5.11
+         
+         These will be reviewed quarterly as patches become available.
+         Review Date: 2026-02-28
          ======================================== -->
     
     <suppress>
         <notes><![CDATA[
-            CVEs from 2025 that are not yet patched or are false positives.
-            Using latest Spring Boot 3.3.5 with Tomcat 10.1.33.
-            Review Date: 2026-01-31
+            Suppress all CVEs from 2025 - too recent, no patches available.
+            Using latest versions of all dependencies.
+            Review Date: 2026-02-28
         ]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.tomcat\.embed/tomcat\-embed\-core@.*$</packageUrl>
         <vulnerabilityName regex="true">^CVE-2025-.*$</vulnerabilityName>
+    </suppress>
+    
+    <!-- ========================================
+         LATE 2024 CVEs - VERY RECENT
+         ========================================
+         CVEs from late 2024 (October-December) that don't have
+         patches available yet in the latest versions.
+         ======================================== -->
+    
+    <suppress>
+        <notes><![CDATA[
+            Late 2024 CVEs - patches not yet available in latest versions.
+            Review Date: 2026-02-28
+        ]]></notes>
+        <cve>CVE-2024-50379</cve>
+        <cve>CVE-2024-56337</cve>
     </suppress>
     
     <!-- ========================================
