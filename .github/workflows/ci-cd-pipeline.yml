@@ -1528,7 +1528,7 @@ jobs:
           echo "Note: In production environment, artifacts would be downloaded from Nexus"
           mvn clean package -DskipTests
           echo "✅ Backend artifact built"
-          ls -lh backend/target/*.jar
+          ls -lh target/*.jar
         working-directory: ./backend
       
       - name: Set up Node.js
@@ -1793,7 +1793,7 @@ jobs:
           echo "Note: In production environment, artifacts would be downloaded from Nexus"
           mvn clean package -DskipTests
           echo "✅ Backend artifact built"
-          ls -lh backend/target/*.jar
+          ls -lh target/*.jar
         working-directory: ./backend
       
       - name: Set up Node.js
