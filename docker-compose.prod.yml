@@ -42,7 +42,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 180s  # Increased for Spring Boot 3.3.5
+      start_period: 60s
     networks:
       - devops-network
     restart: unless-stopped

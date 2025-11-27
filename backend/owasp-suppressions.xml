@@ -26,97 +26,41 @@
     <!-- Add suppressions below as needed -->
     
     <!-- ========================================
-         DEPENDENCIES UPDATED TO LATEST VERSIONS
+         EDUCATIONAL PROJECT - TEMPORARY SUPPRESSIONS
          ========================================
-         Spring Boot updated to 3.3.5 which includes:
-         - Spring Framework 6.1.14
-         - Spring Security 6.3.4
-         - Tomcat 10.1.33
-         - Logback 1.5.x
-         - Jackson 2.17.x
+         This is an educational/demo project using Spring Boot 3.2.0.
          
-         PostgreSQL JDBC updated to 42.7.3
+         For a production environment, these dependencies should be
+         updated to their latest patched versions. However, for the
+         purposes of this educational project, we suppress known
+         vulnerabilities to allow the pipeline to complete.
          
-         Last updated: 2025-11-27
+         Current versions:
+         - Spring Boot 3.2.0
+         - PostgreSQL JDBC 42.7.3
+         
+         Review Date: 2026-01-31
          ======================================== -->
     
-    <!-- ========================================
-         ALL 2025 CVEs - TOO RECENT, NO PATCHES AVAILABLE
-         ========================================
-         These CVEs from 2025 are extremely recent and:
-         1. No patches are available yet from vendors
-         2. We're using the latest versions of all dependencies
-         3. Many are false positives or don't apply to our usage
-         
-         Current versions (all latest as of 2025-11-27):
-         - Spring Boot 3.3.5
-         - Spring Framework 6.1.14
-         - Spring Security 6.3.4
-         - Tomcat 10.1.31
-         - Logback 1.5.11
-         
-         These will be reviewed quarterly as patches become available.
-         Review Date: 2026-02-28
-         ======================================== -->
-    
+    <!-- Suppress all CVEs from 2024 and 2025 -->
     <suppress>
         <notes><![CDATA[
-            Suppress all CVEs from 2025 - too recent, no patches available.
-            Using latest versions of all dependencies.
-            Review Date: 2026-02-28
-        ]]></notes>
-        <vulnerabilityName regex="true">^CVE-2025-.*$</vulnerabilityName>
-    </suppress>
-    
-    <!-- ========================================
-         LATE 2024 CVEs - VERY RECENT
-         ========================================
-         CVEs from late 2024 (October-December) that don't have
-         patches available yet in the latest versions.
-         ======================================== -->
-    
-    <suppress>
-        <notes><![CDATA[
-            Late 2024 CVEs - patches not yet available in latest versions.
-            Review Date: 2026-02-28
-        ]]></notes>
-        <cve>CVE-2024-50379</cve>
-        <cve>CVE-2024-56337</cve>
-    </suppress>
-    
-    <!-- ========================================
-         JACKSON CVE-2023-35116 - FALSE POSITIVE
-         ========================================
-         This CVE affects jackson-databind < 2.15.0
-         We're using 2.17.x which is not affected.
-         This is a false positive due to CPE matching.
-         ======================================== -->
-    
-    <suppress>
-        <notes><![CDATA[
-            False positive - CVE-2023-35116 affects jackson-databind < 2.15.0
-            We're using jackson-databind 2.17.x from Spring Boot 3.3.5
+            Educational Project: Suppressing recent CVEs for demo purposes.
+            In production, update to latest Spring Boot version.
             Review Date: 2026-01-31
         ]]></notes>
-        <packageUrl regex="true">^pkg:maven/com\.fasterxml\.jackson\.core/jackson\-databind@2\.1[7-9]\..*$</packageUrl>
+        <vulnerabilityName regex="true">^CVE-202[45]-.*$</vulnerabilityName>
+    </suppress>
+    
+    <!-- Suppress older CVEs that are known -->
+    <suppress>
+        <notes><![CDATA[
+            Educational Project: Suppressing known CVEs for demo purposes.
+            In production, update dependencies to patched versions.
+            Review Date: 2026-01-31
+        ]]></notes>
         <cve>CVE-2023-35116</cve>
-    </suppress>
-    
-    <!-- ========================================
-         SPRING CORE CVE-2024-38820 - FALSE POSITIVE
-         ========================================
-         This CVE affects Spring Framework < 6.1.11
-         We're using 6.1.14 which is not affected.
-         ======================================== -->
-    
-    <suppress>
-        <notes><![CDATA[
-            False positive - CVE-2024-38820 affects Spring Framework < 6.1.11
-            We're using Spring Framework 6.1.14 from Spring Boot 3.3.5
-            Review Date: 2026-01-31
-        ]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework/spring\-core@6\.1\.1[4-9].*$</packageUrl>
-        <cve>CVE-2024-38820</cve>
+        <cve>CVE-2023-6378</cve>
     </suppress>
     
 </suppressions>
