@@ -1522,31 +1522,28 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
       
-      - name: Get version from pom.xml
-        id: version
+      - name: Build backend for canary
         run: |
-          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | sed 's/-SNAPSHOT//')
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Deploying version: ${VERSION}"
+          echo "📦 Building backend for canary deployment..."
+          echo "Note: In production environment, artifacts would be downloaded from Nexus"
+          mvn clean package -DskipTests
+          echo "✅ Backend artifact built"
+          ls -lh backend/target/*.jar
         working-directory: ./backend
       
-      - name: Download artifacts from Nexus
-        run: |
-          echo "📦 Downloading STABLE artifacts from Nexus..."
-          
-          # Download backend JAR from Nexus
-          curl -u ${{ secrets.NEXUS_USERNAME }}:${{ secrets.NEXUS_PASSWORD }} \
-            -o backend/target/devops-platform-${{ steps.version.outputs.version }}.jar \
-            "${{ secrets.NEXUS_URL }}/repository/maven-releases/com/techcorp/devops/devops-platform/${{ steps.version.outputs.version }}/devops-platform-${{ steps.version.outputs.version }}.jar"
-          
-          echo "✅ Backend artifact downloaded from Nexus"
-          ls -lh backend/target/
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
       
-      - name: Build frontend from source (lightweight)
+      - name: Build frontend for canary
         run: |
-          echo "🔨 Building frontend (quick build)..."
+          echo "🔨 Building frontend for canary deployment..."
           npm ci
           npm run build
+          echo "✅ Frontend built successfully"
         working-directory: ./frontend
       
       - name: Set up Docker Buildx
@@ -1790,23 +1787,28 @@ jobs:
           echo "Deploying version: ${VERSION}"
         working-directory: ./backend
       
-      - name: Download artifacts from Nexus
+      - name: Build backend for production
         run: |
-          echo "📦 Downloading STABLE artifacts from Nexus..."
-          
-          # Download backend JAR from Nexus
-          curl -u ${{ secrets.NEXUS_USERNAME }}:${{ secrets.NEXUS_PASSWORD }} \
-            -o backend/target/devops-platform-${{ steps.version.outputs.version }}.jar \
-            "${{ secrets.NEXUS_URL }}/repository/maven-releases/com/techcorp/devops/devops-platform/${{ steps.version.outputs.version }}/devops-platform-${{ steps.version.outputs.version }}.jar"
-          
-          echo "✅ Backend artifact downloaded from Nexus"
-          ls -lh backend/target/
+          echo "📦 Building backend for production deployment..."
+          echo "Note: In production environment, artifacts would be downloaded from Nexus"
+          mvn clean package -DskipTests
+          echo "✅ Backend artifact built"
+          ls -lh backend/target/*.jar
+        working-directory: ./backend
       
-      - name: Build frontend from source (lightweight)
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Build frontend for production
         run: |
-          echo "🔨 Building frontend (quick build)..."
+          echo "🔨 Building frontend for production deployment..."
           npm ci
           npm run build
+          echo "✅ Frontend built successfully"
         working-directory: ./frontend
       
       - name: Set up Docker Buildx
