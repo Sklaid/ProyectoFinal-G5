@@ -47,16 +47,6 @@ public class AuthenticationPropertiesTest {
     private MockMvc mockMvc;
     
     /**
-     * Clean database before each property test to avoid unique constraint violations
-     * This is critical for property-based tests that run 100+ iterations
-     */
-    @org.junit.jupiter.api.BeforeEach
-    public void cleanupDatabase() {
-        userRepository.deleteAll();
-        userRepository.flush(); // Force immediate deletion
-    }
-    
-    /**
      * Feature: devops-enterprise-platform, Property 1: Valid credentials authenticate successfully
      */
     @Property(tries = 100)
@@ -65,6 +55,7 @@ public class AuthenticationPropertiesTest {
         
         // Cleanup before test to avoid unique constraint violations
         userRepository.deleteAll();
+        userRepository.flush(); // Force immediate deletion
         
         try {
             // Arrange: Create user with hashed password
@@ -75,7 +66,7 @@ public class AuthenticationPropertiesTest {
                     .role(Role.USER)
                     .active(true)
                     .build();
-            userRepository.save(user);
+            userRepository.saveAndFlush(user); // Force immediate save
             
             LoginRequest loginRequest = new LoginRequest(credentials.getUsername(), credentials.getPassword());
             
@@ -106,6 +97,7 @@ public class AuthenticationPropertiesTest {
         
         // Cleanup before test to avoid unique constraint violations
         userRepository.deleteAll();
+        userRepository.flush(); // Force immediate deletion
         
         try {
             // Arrange: Create user with valid credentials
@@ -116,7 +108,7 @@ public class AuthenticationPropertiesTest {
                     .role(Role.USER)
                     .active(true)
                     .build();
-            userRepository.save(user);
+            userRepository.saveAndFlush(user); // Force immediate save
             
             // Try to login with wrong password
             LoginRequest loginRequest = new LoginRequest(validCreds.getUsername(), invalidPassword);
@@ -142,7 +134,7 @@ public class AuthenticationPropertiesTest {
         
         // Cleanup before test to avoid unique constraint violations
         userRepository.deleteAll();
-        
+        userRepository.flush(); // Force immediate deletion
         try {
             // Arrange: Create user with valid credentials
             User user = User.builder()
@@ -152,7 +144,7 @@ public class AuthenticationPropertiesTest {
                     .role(Role.USER)
                     .active(true)
                     .build();
-            userRepository.save(user);
+            userRepository.saveAndFlush(user); // Force immediate save
             
             // Try to login with non-existent username
             LoginRequest loginRequest = new LoginRequest(nonExistentUsername, credentials.getPassword());
@@ -274,7 +266,7 @@ public class AuthenticationPropertiesTest {
         
         // Cleanup before test to avoid unique constraint violations
         userRepository.deleteAll();
-        
+        userRepository.flush(); // Force immediate deletion
         try {
             // Arrange: Create user and login to get a valid token
             User user = User.builder()
@@ -284,7 +276,7 @@ public class AuthenticationPropertiesTest {
                     .role(Role.USER)
                     .active(true)
                     .build();
-            userRepository.save(user);
+            userRepository.saveAndFlush(user); // Force immediate save
             
             LoginRequest loginRequest = new LoginRequest(credentials.getUsername(), credentials.getPassword());
             AuthResponse authResponse = authService.login(loginRequest);
@@ -322,7 +314,7 @@ public class AuthenticationPropertiesTest {
         
         // Cleanup before test to avoid unique constraint violations
         userRepository.deleteAll();
-        
+        userRepository.flush(); // Force immediate deletion
         try {
             // Arrange: Create user with plaintext password
             String plaintextPassword = credentials.getPassword();
@@ -336,7 +328,7 @@ public class AuthenticationPropertiesTest {
                     .build();
             
             // Act: Save user to database
-            User savedUser = userRepository.save(user);
+            User savedUser = userRepository.saveAndFlush(user); // Force immediate save
             
             // Assert 1: Stored password should not match plaintext
             assertNotEquals(plaintextPassword, savedUser.getPassword(),
@@ -366,3 +358,4 @@ public class AuthenticationPropertiesTest {
         }
     }
 }
+
