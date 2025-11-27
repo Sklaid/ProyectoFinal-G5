@@ -510,6 +510,17 @@ jobs:
           # Start backend
           docker compose -f docker-compose.dev.yml up -d backend
           
+          # Give backend a moment to start
+          sleep 5
+          
+          # Check if backend started successfully
+          if ! docker ps | grep -q devops-backend; then
+            echo "❌ Backend container failed to start!"
+            echo "Container logs:"
+            docker logs devops-backend
+            exit 1
+          fi
+          
           # Start frontend
           docker compose -f docker-compose.dev.yml up -d frontend
           
@@ -519,19 +530,44 @@ jobs:
         run: |
           echo "⏳ Waiting for services to be healthy..."
           
-          # Wait for backend health check
+          # Check if backend container is running
+          echo "Checking backend container status..."
+          docker ps -a | grep devops-backend || true
+          
+          # Wait for backend health check (increased timeout for Spring Boot 3.3.5)
           echo "Checking backend health..."
-          for i in {1..30}; do
+          for i in {1..60}; do
+            # Check if container is still running
+            if ! docker ps | grep -q devops-backend; then
+              echo "❌ Backend container stopped unexpectedly!"
+              echo "Container logs:"
+              docker logs devops-backend
+              exit 1
+            fi
+            
+            # Check health endpoint
             if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
               echo "✅ Backend is healthy"
               break
             fi
-            if [ $i -eq 30 ]; then
-              echo "❌ Backend health check timeout"
-              docker logs devops-backend
+            
+            if [ $i -eq 60 ]; then
+              echo "❌ Backend health check timeout after 10 minutes"
+              echo "Container status:"
+              docker ps -a | grep devops-backend
+              echo "Container logs:"
+              docker logs devops-backend --tail 100
               exit 1
             fi
-            echo "Attempt $i/30: Backend not ready yet..."
+            
+            echo "Attempt $i/60: Backend not ready yet..."
+            
+            # Show last 5 lines of logs every 10 attempts
+            if [ $((i % 10)) -eq 0 ]; then
+              echo "Recent backend logs:"
+              docker logs devops-backend --tail 5 2>&1 || echo "Could not fetch logs"
+            fi
+            
             sleep 10
           done
           
