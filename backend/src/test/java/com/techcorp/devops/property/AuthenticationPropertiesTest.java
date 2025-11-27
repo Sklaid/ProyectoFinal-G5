@@ -88,8 +88,12 @@ public class AuthenticationPropertiesTest {
                     tokenProvider.getUsernameFromToken(response.getToken()),
                     "Username from token should match");
         } finally {
-            // Cleanup
-            userRepository.deleteAll();
+            // Cleanup - use deleteAllInBatch to avoid locking issues
+            try {
+                userRepository.deleteAllInBatch();
+            } catch (Exception e) {
+                // Ignore cleanup errors
+            }
         }
     }
     
@@ -100,6 +104,11 @@ public class AuthenticationPropertiesTest {
     public void invalidCredentials_ShouldBeRejected(
             @ForAll("validUserCredentials") ValidUserCredentials validCreds,
             @ForAll("invalidCredentials") String invalidPassword) {
+        
+        // Skip test if passwords happen to match (very rare but possible)
+        if (validCreds.getPassword().equals(invalidPassword)) {
+            return;
+        }
         
         // Cleanup before test to avoid unique constraint violations
         userRepository.deleteAll();
@@ -124,8 +133,12 @@ public class AuthenticationPropertiesTest {
                 authService.login(loginRequest);
             }, "Login with invalid password should throw BadCredentialsException");
         } finally {
-            // Cleanup
-            userRepository.deleteAll();
+            // Cleanup - use deleteAllInBatch to avoid locking issues
+            try {
+                userRepository.deleteAllInBatch();
+            } catch (Exception e) {
+                // Ignore cleanup errors
+            }
         }
     }
     
@@ -140,8 +153,8 @@ public class AuthenticationPropertiesTest {
         
         // Cleanup before test to avoid unique constraint violations
         userRepository.deleteAll();
+        userRepository.flush(); // Force immediate deletion
         
-userRepository.flush(); // Force immediate deletion
         try {
             // Arrange: Create user with valid credentials
             User user = User.builder()
@@ -161,8 +174,12 @@ userRepository.flush(); // Force immediate deletion
                 authService.login(loginRequest);
             }, "Login with non-existent username should throw BadCredentialsException");
         } finally {
-            // Cleanup
-            userRepository.deleteAll();
+            // Cleanup - use deleteAllInBatch to avoid locking issues
+            try {
+                userRepository.deleteAllInBatch();
+            } catch (Exception e) {
+                // Ignore cleanup errors
+            }
         }
     }
     
@@ -273,8 +290,8 @@ userRepository.flush(); // Force immediate deletion
         
         // Cleanup before test to avoid unique constraint violations
         userRepository.deleteAll();
+        userRepository.flush(); // Force immediate deletion
         
-userRepository.flush(); // Force immediate deletion
         try {
             // Arrange: Create user and login to get a valid token
             User user = User.builder()
@@ -308,8 +325,12 @@ userRepository.flush(); // Force immediate deletion
             assertTrue(authService.isTokenBlacklisted(token), 
                     "But token should be in blacklist, preventing authentication");
         } finally {
-            // Cleanup
-            userRepository.deleteAll();
+            // Cleanup - use deleteAllInBatch to avoid locking issues
+            try {
+                userRepository.deleteAllInBatch();
+            } catch (Exception e) {
+                // Ignore cleanup errors
+            }
         }
     }
     
@@ -322,8 +343,8 @@ userRepository.flush(); // Force immediate deletion
         
         // Cleanup before test to avoid unique constraint violations
         userRepository.deleteAll();
+        userRepository.flush(); // Force immediate deletion
         
-userRepository.flush(); // Force immediate deletion
         try {
             // Arrange: Create user with plaintext password
             String plaintextPassword = credentials.getPassword();
@@ -362,8 +383,12 @@ userRepository.flush(); // Force immediate deletion
                     "Different plaintext should not match the stored hash");
             
         } finally {
-            // Cleanup
-            userRepository.deleteAll();
+            // Cleanup - use deleteAllInBatch to avoid locking issues
+            try {
+                userRepository.deleteAllInBatch();
+            } catch (Exception e) {
+                // Ignore cleanup errors
+            }
         }
     }
 }
