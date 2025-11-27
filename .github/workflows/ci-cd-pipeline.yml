@@ -401,15 +401,19 @@ jobs:
       
       - name: Run OWASP Dependency Check (Backend)
         run: |
-          echo "🔐 Using NVD API Key for faster updates..."
+          echo "🔐 Using NVD API Key and OSS Index for faster updates..."
           mvn org.owasp:dependency-check-maven:check \
             -DfailBuildOnCVSS=7 \
             -DsuppressionFiles=owasp-suppressions.xml \
-            -DnvdApiKey=${{ secrets.NVD_API_KEY }}
+            -DnvdApiKey=${{ secrets.NVD_API_KEY }} \
+            -DossIndexUsername=${{ secrets.OSS_INDEX_USERNAME }} \
+            -DossIndexPassword=${{ secrets.OSS_INDEX_TOKEN }}
         working-directory: ./backend
         continue-on-error: true
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          OSS_INDEX_USERNAME: ${{ secrets.OSS_INDEX_USERNAME }}
+          OSS_INDEX_TOKEN: ${{ secrets.OSS_INDEX_TOKEN }}
       
       - name: Upload OWASP report
         if: always()
