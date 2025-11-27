@@ -390,9 +390,10 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
     needs: [build-backend, build-frontend]
-    if: ${{ !inputs.skip_tests }}
+    if: |
+      !inputs.skip_tests &&
+      (github.ref == 'refs/heads/develop' || github.event_name == 'pull_request')
     
     steps:
       - name: Checkout code
@@ -610,9 +611,10 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
     needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan]
-    if: ${{ !inputs.skip_tests }}
+    if: |
+      !inputs.skip_tests &&
+      (github.ref == 'refs/heads/develop' || github.event_name == 'pull_request')
     
     services:
       postgres:
@@ -658,9 +660,10 @@ jobs:
   api-tests:
     name: API Tests (Newman)
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
     needs: [build-backend, build-frontend]
-    if: ${{ !inputs.skip_tests }}
+    if: |
+      !inputs.skip_tests &&
+      (github.ref == 'refs/heads/develop' || github.event_name == 'pull_request')
     permissions:
       contents: read
       checks: write
@@ -1208,9 +1211,10 @@ jobs:
   functional-tests:
     name: Functional Tests (Selenium)
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
     needs: [build-backend, build-frontend]
-    if: ${{ !inputs.skip_tests }}
+    if: |
+      !inputs.skip_tests &&
+      (github.ref == 'refs/heads/develop' || github.event_name == 'pull_request')
     
     steps:
       - name: Checkout code
@@ -1323,10 +1327,11 @@ jobs:
   # Job 11: Performance Tests with JMeter
   performance-tests:
     name: Performance Tests (JMeter)
-    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     needs: [build-backend]
-    if: ${{ !inputs.skip_tests }}
+    if: |
+      !inputs.skip_tests &&
+      (github.ref == 'refs/heads/develop' || github.event_name == 'pull_request')
     
     steps:
       - name: Checkout code
@@ -2019,11 +2024,11 @@ jobs:
   tag-gold-artifact:
     name: Tag GOLD Artifact
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [production-deployment]
     if: |
       success() &&
-      github.ref == 'refs/heads/main'
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push'
     
     permissions:
       contents: write  # Required to push tags
@@ -2126,11 +2131,11 @@ jobs:
   post-deployment-monitoring:
     name: Post-Deployment Monitoring
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [production-deployment]
     if: |
       success() &&
-      github.ref == 'refs/heads/main'
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push'
     
     steps:
       - name: Checkout code
@@ -2450,11 +2455,11 @@ jobs:
   rollback:
     name: Rollback on Failure
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [production-deployment, post-deployment-monitoring]
     if: |
       failure() &&
-      github.ref == 'refs/heads/main'
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push'
     
     steps:
       - name: Checkout code
