@@ -1822,13 +1822,13 @@ jobs:
           # Create production environment file
           cat > .env.production << 'EOF'
           # Database Configuration
-          POSTGRES_DB=devops_platform_prod
+          POSTGRES_DB=devops_platform
           POSTGRES_USER=postgres
           POSTGRES_PASSWORD=postgres
           
           # Backend Configuration
           SPRING_PROFILES_ACTIVE=prod
-          SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-prod:5432/devops_platform_prod
+          SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/devops_platform
           SPRING_DATASOURCE_USERNAME=postgres
           SPRING_DATASOURCE_PASSWORD=postgres
           SERVER_PORT=8080
@@ -1856,7 +1856,7 @@ jobs:
             echo "Production is running, creating backup..."
             
             # Export current database
-            docker exec devops-postgres-prod pg_dump -U postgres devops_platform_prod > backup-$(date +%Y%m%d-%H%M%S).sql || true
+            docker exec devops-postgres-prod pg_dump -U postgres devops_platform > backup-$(date +%Y%m%d-%H%M%S).sql || true
             
             # Tag current images as backup
             docker tag devops-backend-prod:latest devops-backend-prod:backup-$(date +%Y%m%d-%H%M%S) || true
@@ -2136,7 +2136,7 @@ jobs:
             - Docker images built and deployed
             
             ### Deployment URLs
-            - **Frontend:** http://localhost:3000
+            - **Frontend:** http://localhost:80
             - **Backend API:** http://localhost:8080
             - **Health Check:** http://localhost:8080/actuator/health
           draft: false
@@ -2195,14 +2195,14 @@ jobs:
             echo "  ✅ Backend health: $HEALTH_STATUS"
             
             # Check frontend
-            if ! curl -f http://localhost:3000 > /dev/null 2>&1; then
+            if ! curl -f http://localhost:80 > /dev/null 2>&1; then
               echo "❌ Frontend health check failed"
               exit 1
             fi
             echo "  ✅ Frontend: Responding"
             
             # Check database connectivity
-            if ! docker exec devops-postgres-prod psql -U postgres -d devops_platform_prod -c "SELECT 1" > /dev/null 2>&1; then
+            if ! docker exec devops-postgres-prod psql -U postgres -d devops_platform -c "SELECT 1" > /dev/null 2>&1; then
               echo "❌ Database connectivity check failed"
               exit 1
             fi
@@ -2597,7 +2597,7 @@ jobs:
           if [ -f backup-*.sql ]; then
             LATEST_BACKUP=$(ls -t backup-*.sql | head -n 1)
             echo "Restoring database from: $LATEST_BACKUP"
-            docker exec -i devops-postgres-prod psql -U postgres devops_platform_prod < $LATEST_BACKUP || {
+            docker exec -i devops-postgres-prod psql -U postgres devops_platform < $LATEST_BACKUP || {
               echo "⚠️ Database restore failed, continuing with current state"
             }
           fi
@@ -2628,7 +2628,7 @@ jobs:
           
           echo "Waiting for frontend..."
           for i in {1..15}; do
-            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+            if curl -f http://localhost:80 > /dev/null 2>&1; then
               echo "✅ Frontend is healthy"
               break
             fi
@@ -2654,7 +2654,7 @@ jobs:
           echo "✅ Health endpoint test passed"
           
           # Test frontend
-          if ! curl -f http://localhost:3000 > /dev/null 2>&1; then
+          if ! curl -f http://localhost:80 > /dev/null 2>&1; then
             echo "❌ Frontend test failed"
             exit 1
           fi
