@@ -1923,7 +1923,7 @@ jobs:
           echo "Checking production frontend health..."
           echo "Note: Frontend may take longer as it depends on backend and nginx configuration"
           for i in {1..25}; do
-            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+            if curl -f http://localhost:80 > /dev/null 2>&1; then
               echo "✅ Production frontend is healthy"
               break
             fi
