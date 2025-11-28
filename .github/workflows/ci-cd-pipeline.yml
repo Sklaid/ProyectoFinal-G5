@@ -1549,6 +1549,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
+      - name: Prepare canary nginx configuration
+        run: |
+          echo "Creating canary-specific nginx configuration..."
+          # Backup original
+          cp frontend/nginx.conf frontend/nginx.conf.original
+          # Create canary version
+          sed 's/http:\/\/backend:8080/http:\/\/backend-canary:8080/g' frontend/nginx.conf > frontend/nginx.conf.canary
+          # Use canary version
+          cp frontend/nginx.conf.canary frontend/nginx.conf
+      
       - name: Deploy canary instance (10% traffic)
         run: |
           echo "🐤 Deploying canary instance..."
@@ -1556,11 +1566,6 @@ jobs:
           
           # In a real scenario, this would deploy to a subset of production instances
           # For this demo, we'll simulate canary deployment with a separate container
-          
-          # Create canary-specific nginx config
-          echo "Creating canary nginx configuration..."
-          sed 's/http:\/\/backend:8080/http:\/\/backend-canary:8080/g' frontend/nginx.conf > frontend/nginx.canary.conf
-          cp frontend/nginx.canary.conf frontend/nginx.conf
           
           # Create canary docker-compose configuration
           cat > docker-compose.canary.yml << 'EOF'
@@ -1866,6 +1871,17 @@ jobs:
             echo "No existing production deployment found, skipping backup"
           fi
       
+      - name: Prepare production nginx configuration
+        run: |
+          echo "Restoring production nginx configuration..."
+          # Restore original nginx config
+          if [ -f frontend/nginx.conf.original ]; then
+            cp frontend/nginx.conf.original frontend/nginx.conf
+            echo "✅ Nginx config restored for production"
+          else
+            echo "⚠️ Original nginx config not found, using current"
+          fi
+      
       - name: Deploy to production
         run: |
           echo "🚀 Deploying to production environment..."
@@ -1873,10 +1889,6 @@ jobs:
           # Stop canary deployment
           echo "Stopping canary deployment..."
           docker compose -f docker-compose.canary.yml down || true
-          
-          # Restore original nginx config for production
-          echo "Restoring production nginx configuration..."
-          git checkout frontend/nginx.conf || true
           
           # Deploy production using docker-compose.prod.yml
           echo "Starting production deployment..."
