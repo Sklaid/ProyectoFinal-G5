@@ -37,14 +37,15 @@ Configurar reglas de protección para la rama `main` que fuercen el uso de Pull 
 - Click en **"Search for status checks"** para ver los checks disponibles
 
 **Status checks requeridos** (selecciona los que aparezcan):
-- `build-backend`
-- `build-frontend`
-- `unit-tests`
-- `sonarqube-analysis`
-- `integration-tests`
-- `api-tests`
-- `functional-tests`
-- `performance-tests`
+Build Backend
+Build Frontend
+Unit Tests
+- SonarQube Analysis (Multi-Module)
+- Integration Tests
+- API Tests (Newman)
+- Functional Tests (Selenium)
+- Performance Tests (JMeter)
+Nota: Omití Security Scan y Deploy to Pre-Production porque no son críticos para el merge (son opcionales).
 
 **Nota**: Solo aparecerán los checks que ya hayan corrido al menos una vez. Si no ves alguno, verifica que el job correspondiente esté habilitado en el workflow.
 

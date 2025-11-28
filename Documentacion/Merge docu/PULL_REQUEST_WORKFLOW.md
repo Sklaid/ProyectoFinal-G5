@@ -6,7 +6,7 @@ Documentar el flujo completo para llevar código desde `develop` hasta producci�
 
 ## Flujo Completo
 
-### Fase 1: Desarrollo en Develop ✅ (Task 20.1)
+### Fase 1: Desarrollo en Develop ✅ (Task 20.1 - COMPLETADA)
 
 ```bash
 # 1. Trabajar en develop
@@ -23,7 +23,22 @@ git push origin develop
 
 **Resultado**: Pipeline ejecuta hasta **Tag STABLE** ✅
 
+---
+
 ### Fase 2: Pull Request a Main 🚀 (Task 20.2)
+
+⚠️ **IMPORTANTE**: Antes de crear el Pull Request, debes configurar las Branch Protection Rules.
+
+#### Paso 0: Configurar Branch Protection Rules (HACER PRIMERO)
+
+**Ver**: `Documentacion/BRANCH_PROTECTION_SETUP.md`
+
+1. GitHub → Settings → Branches → Add rule
+2. Branch: `main`
+3. Configurar reglas (require PR, status checks, approvals)
+4. Guardar
+
+**Por qué primero**: Si creas el PR antes de configurar las reglas, el PR no tendrá las validaciones automáticas.
 
 #### Paso 1: Crear Pull Request
 
