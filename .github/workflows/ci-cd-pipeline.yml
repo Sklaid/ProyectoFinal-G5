@@ -119,6 +119,10 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
       
+      - name: Clean Maven cache for Flyway migrations
+        run: mvn clean
+        working-directory: ./backend
+      
       - name: Run backend unit tests
         if: ${{ !inputs.skip_tests }}
         run: mvn test jacoco:report
