@@ -117,7 +117,12 @@ jobs:
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: 'temurin'
-          cache: 'maven'
+          # Temporarily disable cache to force clean build
+          # cache: 'maven'
+      
+      - name: Clean Maven cache for Flyway migrations
+        run: mvn clean
+        working-directory: ./backend
       
       - name: Run backend unit tests
         if: ${{ !inputs.skip_tests }}

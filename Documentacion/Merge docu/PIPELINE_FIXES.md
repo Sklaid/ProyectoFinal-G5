@@ -47,10 +47,8 @@
 - Functional Tests (9 tests)
 - Performance Tests (JMeter)
 - SonarQube Analysis
+- Security Scan (OWASP Dependency Check + npm audit)
 - Nexus Deployment
-
-⚠️ **Temporalmente deshabilitado**:
-- Security Scan (toma ~27 min, re-habilitar para producción)
 
 ## Comandos Útiles
 
