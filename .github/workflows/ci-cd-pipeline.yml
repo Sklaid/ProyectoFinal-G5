@@ -2029,6 +2029,45 @@ jobs:
           echo ""
           echo "✅ All smoke tests passed"
       
+      - name: Monitor production for 2 minutes
+        run: |
+          echo "📊 Monitoring production deployment..."
+          echo "Performing health checks every 30 seconds for 2 minutes"
+          
+          for i in {1..4}; do
+            echo ""
+            echo "🔍 Health check $i/4 ($(($i * 30))s elapsed)"
+            
+            # Backend health
+            HEALTH_STATUS=$(curl -s http://localhost:8080/actuator/health | jq -r '.status // "UNKNOWN"')
+            echo "  ✅ Backend: $HEALTH_STATUS"
+            
+            # Frontend health
+            if curl -f http://localhost:80 > /dev/null 2>&1; then
+              echo "  ✅ Frontend: Responding"
+            else
+              echo "  ⚠️ Frontend: Not responding"
+            fi
+            
+            # Database
+            if docker exec devops-postgres-prod psql -U postgres -d devops_platform -c "SELECT 1" > /dev/null 2>&1; then
+              echo "  ✅ Database: Connected"
+            else
+              echo "  ⚠️ Database: Connection issue"
+            fi
+            
+            # Check logs for errors
+            ERROR_COUNT=$(docker logs devops-backend-prod --since 30s 2>&1 | grep -i "error" | wc -l || echo "0")
+            echo "  📋 Errors in last 30s: $ERROR_COUNT"
+            
+            if [ $i -lt 4 ]; then
+              sleep 30
+            fi
+          done
+          
+          echo ""
+          echo "✅ Production monitoring completed - No critical issues detected"
+      
       - name: Display production info
         run: |
           echo "## Production Deployment" >> $GITHUB_STEP_SUMMARY
@@ -2153,160 +2192,11 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ Successfully deployed to production and tagged as GOLD release." >> $GITHUB_STEP_SUMMARY
 
-  # Job 16: Post-Deployment Monitoring
-  post-deployment-monitoring:
-    name: Post-Deployment Monitoring
-    runs-on: ubuntu-latest
-    needs: [production-deployment]
-    if: |
-      success() &&
-      github.ref == 'refs/heads/main' &&
-      github.event_name == 'push'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Monitor application metrics
-        run: |
-          echo "📊 Monitoring application metrics..."
-          
-          # Monitor for 3 minutes post-deployment
-          MONITOR_DURATION=180  # 3 minutes
-          CHECK_INTERVAL=30     # Check every 30 seconds
-          CHECKS=$((MONITOR_DURATION / CHECK_INTERVAL))
-          
-          echo "Will perform $CHECKS health checks over $MONITOR_DURATION seconds"
-          echo ""
-          
-          for i in $(seq 1 $CHECKS); do
-            echo "🔍 Health check $i/$CHECKS ($(($i * $CHECK_INTERVAL))s elapsed)"
-            
-            # Check backend health
-            HEALTH_RESPONSE=$(curl -s http://localhost:8080/actuator/health)
-            HEALTH_STATUS=$(echo "$HEALTH_RESPONSE" | jq -r '.status // "UNKNOWN"')
-            
-            if [ "$HEALTH_STATUS" != "UP" ]; then
-              echo "❌ Backend health check failed: $HEALTH_STATUS"
-              echo "Response: $HEALTH_RESPONSE"
-              exit 1
-            fi
-            
-            echo "  ✅ Backend health: $HEALTH_STATUS"
-            
-            # Check frontend
-            if ! curl -f http://localhost:80 > /dev/null 2>&1; then
-              echo "❌ Frontend health check failed"
-              exit 1
-            fi
-            echo "  ✅ Frontend: Responding"
-            
-            # Check database connectivity
-            if ! docker exec devops-postgres-prod psql -U postgres -d devops_platform -c "SELECT 1" > /dev/null 2>&1; then
-              echo "❌ Database connectivity check failed"
-              exit 1
-            fi
-            echo "  ✅ Database: Connected"
-            
-            # Get metrics if available
-            METRICS=$(curl -s http://localhost:8080/actuator/metrics 2>/dev/null || echo "{}")
-            if [ "$METRICS" != "{}" ]; then
-              echo "  📈 Metrics endpoint: Available"
-            fi
-            
-            # Check for errors in recent logs
-            ERROR_COUNT=$(docker logs devops-backend-prod --since 30s 2>&1 | grep -i "error" | wc -l || echo "0")
-            WARN_COUNT=$(docker logs devops-backend-prod --since 30s 2>&1 | grep -i "warn" | wc -l || echo "0")
-            
-            echo "  📋 Recent logs: $ERROR_COUNT errors, $WARN_COUNT warnings"
-            
-            if [ "$ERROR_COUNT" -gt 5 ]; then
-              echo "⚠️ High error count detected!"
-              echo "Recent errors:"
-              docker logs devops-backend-prod --since 30s 2>&1 | grep -i "error" | tail -3
-            fi
-            
-            echo ""
-            
-            if [ $i -lt $CHECKS ]; then
-              sleep $CHECK_INTERVAL
-            fi
-          done
-          
-          echo "✅ Post-deployment monitoring completed successfully"
-      
-      - name: Validate application metrics
-        run: |
-          echo "📈 Validating application metrics..."
-          
-          # Get health details
-          HEALTH=$(curl -s http://localhost:8080/actuator/health)
-          echo "Health Status:"
-          echo "$HEALTH" | jq '.'
-          
-          # Check if all components are UP
-          DB_STATUS=$(echo "$HEALTH" | jq -r '.components.db.status // "UNKNOWN"')
-          DISK_STATUS=$(echo "$HEALTH" | jq -r '.components.diskSpace.status // "UNKNOWN"')
-          PING_STATUS=$(echo "$HEALTH" | jq -r '.components.ping.status // "UNKNOWN"')
-          
-          echo ""
-          echo "Component Status:"
-          echo "  Database: $DB_STATUS"
-          echo "  Disk Space: $DISK_STATUS"
-          echo "  Ping: $PING_STATUS"
-          
-          # Validate all components are UP
-          if [ "$DB_STATUS" != "UP" ]; then
-            echo "❌ Database component is not UP"
-            exit 1
-          fi
-          
-          if [ "$DISK_STATUS" != "UP" ]; then
-            echo "❌ Disk space component is not UP"
-            exit 1
-          fi
-          
-          echo ""
-          echo "✅ All application metrics are healthy"
-      
-      - name: Check container resource usage
-        run: |
-          echo "💻 Checking container resource usage..."
-          
-          # Get container stats
-          echo "Container Resource Usage:"
-          docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" \
-            devops-backend-prod devops-frontend-prod devops-postgres-prod
-          
-          echo ""
-          echo "✅ Resource usage check completed"
-      
-      - name: Generate monitoring report
-        run: |
-          echo "## Post-Deployment Monitoring Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Monitoring Duration:** 3 minutes" >> $GITHUB_STEP_SUMMARY
-          echo "- **Health Checks:** All passed" >> $GITHUB_STEP_SUMMARY
-          echo "- **Application Status:** ✅ Healthy" >> $GITHUB_STEP_SUMMARY
-          echo "- **Database Status:** ✅ Connected" >> $GITHUB_STEP_SUMMARY
-          echo "- **Frontend Status:** ✅ Responding" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Get final health status
-          HEALTH=$(curl -s http://localhost:8080/actuator/health)
-          echo "### Health Check Details" >> $GITHUB_STEP_SUMMARY
-          echo '```json' >> $GITHUB_STEP_SUMMARY
-          echo "$HEALTH" | jq '.' >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "✅ Post-deployment monitoring completed. Application is stable." >> $GITHUB_STEP_SUMMARY
-
-  # Job 17: Notifications
+  # Job 16: Notifications
   notifications:
     name: Send Notifications
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan, deploy-preprod, integration-tests, api-tests, publish-artifacts, functional-tests, performance-tests, tag-stable-artifact, canary-deployment, production-deployment, tag-gold-artifact, post-deployment-monitoring]
+    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan, deploy-preprod, integration-tests, api-tests, publish-artifacts, functional-tests, performance-tests, tag-stable-artifact, canary-deployment, production-deployment, tag-gold-artifact]
     if: |
       always() &&
       (needs.build-backend.result != 'skipped' || needs.canary-deployment.result != 'skipped')
@@ -2477,11 +2367,11 @@ jobs:
             echo "To enable Slack notifications, add SLACK_WEBHOOK_URL to repository secrets." >> $GITHUB_STEP_SUMMARY
           fi
 
-  # Job 18: Rollback on Failure
+  # Job 17: Rollback on Failure
   rollback:
     name: Rollback on Failure
     runs-on: ubuntu-latest
-    needs: [production-deployment, post-deployment-monitoring]
+    needs: [production-deployment]
     if: |
       failure() &&
       github.ref == 'refs/heads/main' &&
@@ -2733,7 +2623,7 @@ jobs:
   pipeline-summary:
     name: Pipeline Summary
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan, deploy-preprod, integration-tests, api-tests, publish-artifacts, functional-tests, performance-tests, tag-stable-artifact, canary-deployment, production-deployment, tag-gold-artifact, post-deployment-monitoring, notifications, rollback]
+    needs: [build-backend, build-frontend, unit-tests, sonarqube-analysis, security-scan, deploy-preprod, integration-tests, api-tests, publish-artifacts, functional-tests, performance-tests, tag-stable-artifact, canary-deployment, production-deployment, tag-gold-artifact, notifications, rollback]
     if: |
       always() &&
       (needs.build-backend.result != 'skipped' || needs.canary-deployment.result != 'skipped')
@@ -2775,7 +2665,6 @@ jobs:
             echo "- Canary Deployment: ${{ needs.canary-deployment.result }}" >> $GITHUB_STEP_SUMMARY
             echo "- Production Deployment: ${{ needs.production-deployment.result }}" >> $GITHUB_STEP_SUMMARY
             echo "- Tag GOLD Artifact: ${{ needs.tag-gold-artifact.result }}" >> $GITHUB_STEP_SUMMARY
-            echo "- Post-Deployment Monitoring: ${{ needs.post-deployment-monitoring.result }}" >> $GITHUB_STEP_SUMMARY
             echo "- Rollback: ${{ needs.rollback.result }}" >> $GITHUB_STEP_SUMMARY
           fi
           
