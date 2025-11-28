@@ -1557,6 +1557,11 @@ jobs:
           # In a real scenario, this would deploy to a subset of production instances
           # For this demo, we'll simulate canary deployment with a separate container
           
+          # Create canary-specific nginx config
+          echo "Creating canary nginx configuration..."
+          sed 's/http:\/\/backend:8080/http:\/\/backend-canary:8080/g' frontend/nginx.conf > frontend/nginx.canary.conf
+          cp frontend/nginx.canary.conf frontend/nginx.conf
+          
           # Create canary docker-compose configuration
           cat > docker-compose.canary.yml << 'EOF'
           version: '3.8'
@@ -1868,6 +1873,10 @@ jobs:
           # Stop canary deployment
           echo "Stopping canary deployment..."
           docker compose -f docker-compose.canary.yml down || true
+          
+          # Restore original nginx config for production
+          echo "Restoring production nginx configuration..."
+          git checkout frontend/nginx.conf || true
           
           # Deploy production using docker-compose.prod.yml
           echo "Starting production deployment..."
