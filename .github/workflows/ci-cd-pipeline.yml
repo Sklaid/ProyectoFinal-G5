@@ -1622,7 +1622,7 @@ jobs:
           EOF
           
           # Start canary deployment
-          docker-compose -f docker-compose.canary.yml up -d
+          docker compose -f docker-compose.canary.yml up -d
           
           echo "✅ Canary instance deployed"
       
@@ -1758,7 +1758,7 @@ jobs:
         if: failure()
         run: |
           echo "🧹 Cleaning up failed canary deployment..."
-          docker-compose -f docker-compose.canary.yml down -v || true
+          docker compose -f docker-compose.canary.yml down -v || true
           echo "Canary deployment cleaned up"
 
   # Job 14: Production Deployment
@@ -1872,14 +1872,14 @@ jobs:
           
           # Stop canary deployment
           echo "Stopping canary deployment..."
-          docker-compose -f docker-compose.canary.yml down || true
+          docker compose -f docker-compose.canary.yml down || true
           
           # Deploy production using docker-compose.prod.yml
           echo "Starting production deployment..."
-          docker-compose -f docker-compose.prod.yml down || true
+          docker compose -f docker-compose.prod.yml down || true
           
           # Start PostgreSQL first
-          docker-compose -f docker-compose.prod.yml up -d postgres
+          docker compose -f docker-compose.prod.yml up -d postgres
           
           # Wait for PostgreSQL to be ready
           echo "⏳ Waiting for PostgreSQL to be ready..."
@@ -1890,10 +1890,10 @@ jobs:
           }
           
           # Start backend
-          docker-compose -f docker-compose.prod.yml up -d backend
+          docker compose -f docker-compose.prod.yml up -d backend
           
           # Start frontend
-          docker-compose -f docker-compose.prod.yml up -d frontend
+          docker compose -f docker-compose.prod.yml up -d frontend
           
           echo "✅ Production services started"
       
@@ -2501,10 +2501,10 @@ jobs:
           echo "🛑 Stopping failed production deployment..."
           
           # Stop current production containers
-          docker-compose -f docker-compose.prod.yml down || true
+          docker compose -f docker-compose.prod.yml down || true
           
           # Also stop canary if it's still running
-          docker-compose -f docker-compose.canary.yml down || true
+          docker compose -f docker-compose.canary.yml down || true
           
           echo "✅ Failed deployment stopped"
       
@@ -2560,7 +2560,7 @@ jobs:
           echo "🚀 Redeploying previous stable version..."
           
           # Start PostgreSQL first
-          docker-compose -f docker-compose.prod.yml up -d postgres
+          docker compose -f docker-compose.prod.yml up -d postgres
           
           # Wait for PostgreSQL
           echo "⏳ Waiting for PostgreSQL..."
@@ -2579,7 +2579,7 @@ jobs:
           fi
           
           # Start backend and frontend
-          docker-compose -f docker-compose.prod.yml up -d backend frontend
+          docker compose -f docker-compose.prod.yml up -d backend frontend
           
           echo "✅ Previous version redeployed"
       
